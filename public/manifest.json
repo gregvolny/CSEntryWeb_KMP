@@ -1,0 +1,54 @@
+{
+    "name": "CSEntry Web Application",
+    "short_name": "CSEntry",
+    "description": "Census Data Entry Application for Web - Collect survey data offline with automatic synchronization",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#488840",
+    "orientation": "any",
+    "scope": "/",
+    "lang": "en-US",
+    "categories": ["productivity", "utilities", "business"],
+    "icons": [
+        {
+            "src": "/icons/icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "New Entry",
+            "short_name": "New",
+            "description": "Start a new data entry session",
+            "url": "/?action=new"
+        },
+        {
+            "name": "Sync Data",
+            "short_name": "Sync",
+            "description": "Synchronize data with server",
+            "url": "/?action=sync"
+        }
+    ],
+    "related_applications": [],
+    "prefer_related_applications": false,
+    "share_target": {
+        "action": "/share-target",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+            "files": [
+                {
+                    "name": "file",
+                    "accept": [".csdb", ".cslog", ".pff", "application/json"]
+                }
+            ]
+        }
+    },
+    "handle_links": "preferred",
+    "launch_handler": {
+        "client_mode": "navigate-existing"
+    }
+}

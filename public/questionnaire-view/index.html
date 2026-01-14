@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, maximum-scale=1, minimum-scale=1, user-scalable=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="/external/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="/external/bootstrap/bootstrap-icons.css" />
+
+    <link rel="stylesheet" href="/external/jquery/jquery-ui.min.css" />
+    <link rel="stylesheet" href="/css/case-view2.css" />
+    <link rel="stylesheet" href="/css/case-view-main-style.css" />
+    <link rel="stylesheet" href="/css/case-view-main-style-print.css" />
+
+    <script src="/action-invoker.js"></script>
+    <script src="/external/jquery/jquery.min.js"></script>
+    <script src="/external/jquery/jquery-ui.min.js"></script>
+    <script src="/external/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="/external/handlebars/handlebars.js"></script>
+    <script src="/external/js-barcode/JsBarcode.all.min.js"></script>
+    <script src="/questionnaire-view/InputProcessor.js"></script>
+    <script src="/questionnaire-view/CaseViewFactory.js"></script>
+
+    <title>Questionnaire Viewer</title>
+
+    <script>
+        const CS = new CSProActionInvoker("ba595f180197aec52c4a39ffb9d12233");
+        var caseViewPrinter = new CaseViewFactory();
+
+        function normalizeContentResult(result) {
+            if (result == null) return null;
+            if (typeof result === 'string') {
+                try {
+                    return JSON.parse(result);
+                } catch (e) {
+                    console.warn('[questionnaire-view] Could not parse string result as JSON');
+                    return null;
+                }
+            }
+            return result;
+        }
+
+        function initializeViewer(input) {
+            input = input || {};
+            setOptions(input);
+            caseViewPrinter.container = $('.report-container');
+
+            // If a name is specified in the input data (without a dictionary), get the content for that name.
+            if (input.hasOwnProperty("name") && !input.hasOwnProperty("dictionary")) {
+                updateContentByName(input.name, input.key, input.uuid);
+                return;
+            }
+
+            // If content is already provided, render it.
+            if (input.hasOwnProperty("dictionary") && input.hasOwnProperty("forms")) {
+                updateContent(input);
+                return;
+            }
+
+            // Default: render current application's current case content.
+            updateContentByName(null, null, null);
+        }
+
+        $(document).ready(function () {
+            // Web requirement: ESC should close the viewer.
+            // Note: when focus is inside the iframe, the parent page may not receive key events.
+            document.addEventListener('keydown', function (e) {
+                if (e && (e.key === 'Escape' || e.key === 'Esc')) {
+                    try { e.preventDefault(); } catch (_) { }
+
+                    try {
+                        // In dialog/iframe mode, request the parent to close.
+                        if (typeof CS !== 'undefined' && CS && CS.UI && typeof CS.UI.closeDialog === 'function') {
+                            CS.UI.closeDialog();
+                            return;
+                        }
+                    } catch (_) { }
+
+                    // Robust iframe fallback: close via postMessage even if ActionInvoker isn't initialized.
+                    try {
+                        if (window.parent && window.parent !== window) {
+                            window.parent.postMessage({ type: 'cspro-dialog-close', result: null }, '*');
+                            return;
+                        }
+                    } catch (_) { }
+
+                    // Standalone fallback (best-effort)
+                    try { window.history.back(); } catch (_) { }
+                    try { window.close(); } catch (_) { }
+                }
+            });
+
+            // In web/iframe mode, wait for input injected via postMessage.
+            if (typeof CSProEnvironment !== 'undefined' && CSProEnvironment.isWebMode()) {
+                try {
+                    window.parent && window.parent.postMessage({ type: 'cspro-dialog-ready' }, '*');
+                } catch (_) { }
+
+                window.addEventListener('message', function (event) {
+                    if (event.data && event.data.type === 'cspro-dialog-input') {
+                        initializeViewer(event.data.input || {});
+                    }
+                });
+
+                // Some dialogs rely on the unified cspro-input-ready signal.
+                window.addEventListener('cspro-input-ready', function (event) {
+                    initializeViewer(event.detail?.inputData || CS.UI.getInputData() || {});
+                });
+
+                // If already initialized (rare), render immediately.
+                if (typeof CSProActionInvokerWebState !== 'undefined' && CSProActionInvokerWebState.initialized) {
+                    initializeViewer(CS.UI.getInputData() || {});
+                }
+            }
+            else {
+                // Native mode
+                initializeViewer(CS.UI.getInputData() || {});
+            }
+        });
+
+        function updateContentByName(name, key, uuid) {
+            const args = {
+                serializationOptions: {
+                    // Web builds don't have a localhost file server. Embed binaries as data URLs.
+                    binaryDataFormat: "dataUrl"
+                }
+            };
+
+            if (name) args.name = name;
+            if (key) args.key = key;
+            if (uuid) args.uuid = uuid;
+
+            CS.Application.getQuestionnaireContentAsync(args)
+                .then(function (result) {
+                    const data = normalizeContentResult(result);
+                    if (!data) {
+                        updateContent({ error: 'Failed to load questionnaire content (empty result).' });
+                        return;
+                    }
+                    updateContent(data);
+                })
+                .catch(function (e) {
+                    console.error('[questionnaire-view] Failed to load questionnaire content:', e);
+                    updateContent({ error: e && e.message ? e.message : String(e) });
+                });
+        }
+
+        function onMessage(jsonMessageText) {
+            let message = JSON.parse(jsonMessageText);
+
+            switch (message.action) {
+                case "languageChange":
+                    caseViewPrinter.currentLanguageId = message.language;
+                    return true;
+
+                case "refreshContent":
+                    updateContentByName(message.name, message.key, message.uuid);
+                    return true;
+            }
+        }
+
+        function setOptions(input) {
+            //language
+            if (input.language) {
+                caseViewPrinter.currentLanguageId = input.language;
+            }
+
+            //default values
+            caseViewPrinter.doPrintQuestionnaire = false;
+            caseViewPrinter.flatRosters = false;
+            caseViewPrinter.maxRosterOcc = 0;
+            caseViewPrinter.printAllValueSets = false;
+            caseViewPrinter.renderFrame = true;
+            caseViewPrinter.showLanguageBar = true;
+
+            //trying to get values from input
+            if ("printQuestionnaire" in input) {
+                caseViewPrinter.doPrintQuestionnaire = input.printQuestionnaire === true;
+            }
+
+            if ("flatRosters" in input) {
+                caseViewPrinter.flatRosters = input.flatRosters === true;
+            }
+
+            if ("maxRosterOcc" in input) {
+                caseViewPrinter.maxRosterOcc = input.maxRosterOcc;
+            }
+
+            if ("printAllValueSets" in input) {
+                caseViewPrinter.printAllValueSets = input.printAllValueSets === true;
+            }
+
+            if ("drawFrame" in input) {
+                caseViewPrinter.renderFrame = input.drawFrame === true;
+            }
+
+            if ("showLanguageBar" in input) {
+                caseViewPrinter.showLanguageBar = input.showLanguageBar === true;
+            }
+
+        }
+
+        function updateContent(content) {
+            caseViewPrinter.renderCase(
+                caseViewPrinter.convertJson(content)
+            );
+            if (content.error) {
+                alert(content.error);
+            }
+        }
+    </script>
+
+</head>
+
+<body class="main-container">
+    <div class="report-container">
+    </div>
+</body>
+
+</html>

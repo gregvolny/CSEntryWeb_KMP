@@ -1,0 +1,18 @@
+Using webpack output from: C:\Users\Admin\OneDrive\Documents\Github\CSEntry Web App\CSEntryWeb_KMP\build\kotlin-webpack\wasmJs\developmentExecutable
+Serving compilation output from: C:\Users\Admin\OneDrive\Documents\Github\CSEntry Web App\CSEntryWeb_KMP\build\compileSync\wasmJs\main\developmentExecutable\kotlin
+
+╔════════════════════════════════════════════════════════════╗
+║                                                            ║
+║           CSEntry Web - Kotlin/Wasm Server                ║
+║                                                            ║
+╚════════════════════════════════════════════════════════════╝
+
+Server running at: http://localhost:3002
+
+Endpoints:
+  - Main app:        http://localhost:3002/
+  - Kotlin/Wasm:     http://localhost:3002/wasm-ui/
+  - C++ WASM:        http://localhost:3002/wasm/
+
+Press Ctrl+C to stop the server
+

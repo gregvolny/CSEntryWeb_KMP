@@ -1,0 +1,393 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, maximum-scale=1, minimum-scale=1, user-scalable=no">
+
+    <!-- Bootstrap CSS - use relative paths for iframe compatibility -->
+    <link rel="stylesheet" href="external/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="external/bootstrap/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/dialogs.css">
+
+    <!-- Early error handler to catch all errors -->
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            console.error('[errmsg] GLOBAL ERROR:', msg, 'at', url + ':' + line + ':' + col, error);
+            return false;
+        };
+        console.log('[errmsg] HTML starting to load...');
+    </script>
+
+    <!-- Unified Action invoker - auto-detects environment -->
+    <script src="../action-invoker.js"></script>
+    <script>
+        // Create global CS instance - unified action-invoker handles environment detection
+        window.CS = new CSProActionInvoker('');
+        
+        // Note: We'll signal ready AFTER jQuery and Mustache are loaded (in document.ready)
+    </script>
+    <script src="external/jquery/jquery.min.js"></script>
+    <script src="external/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="external/mustache/mustache.min.js"></script>
+
+    <title>Error Message</title>
+
+    <style>
+        .my-button {
+            height:auto;
+        }
+            .my-button:focus {
+                border: 1px solid #aaa !important;
+            }
+    </style>
+
+    <script id="errmsgTemplate" type="text/template">
+        <div id="mWidth" style="display:inline-block;">
+            <div>
+                <span class="col withNewline" style="white-space: nowrap;">
+                    {{message}}
+                </span>
+            </div>
+            <div>
+                <span class="col withNewline" style="white-space: nowrap;padding-right:48px;">
+                    {{title}}
+                </span>
+            </div>
+            {{#buttons}}
+            <div>
+                <span class="col withNewline" style="white-space: nowrap;">
+                    {{caption}}
+                </span>
+            </div>
+            {{/buttons}}
+        </div>
+        <div id="mContainer" class="container-fluid my-dialog errmsg-dialog" style="overflow-y:auto;">
+            <div id="mTitle" class="row my-dialog-header">
+                <div class="col withNewline">
+                    {{title}}
+                </div>
+                <div class="btn-close my-close-button" aria-label="Close" onclick="closeDialogSafely();">
+                </div>
+            </div>
+            <div class="row my-dialog-body" style="padding-top:12px;">
+                <div class="col withNewline" style="word-wrap:break-word;">
+                    {{#messageNumber}}<strong>{{messageNumber}}:</strong> {{/messageNumber}}{{message}}
+                </div>
+            </div>
+            <div class="row text-end my-dialog-footer">
+                {{#buttons}}
+                <div class="col col-lg-{{split}} col-md-{{split}} col-sm-{{split}} my-dialog-button-col {{btnAlign}}">
+                    <button id="b{{index}}" class="btn btn-light {{btnType}} text-center my-button withNewline" type="button" onclick="dialogReturn({{index}})" tabindex="-1">
+                        {{caption}}
+                    </button>
+                </div>
+                {{/buttons}}
+            </div>
+        </div>
+    </script>
+
+    <script>
+        // In native mode, create CS instance from the loaded action-invoker.js
+        // In web mode, CS is already created in the inline script above
+        console.log('[errmsg] Script block starting, CS available:', typeof CS, 'CSProActionInvoker:', typeof CSProActionInvoker);
+        if (typeof CS === 'undefined') {
+            console.log('[errmsg] Creating CS instance with token');
+            window.CS = new CSProActionInvoker("2fdd7429f354f24ae73647d5a2ae672f");
+        }
+        console.log('[errmsg] CS instance ready, _isWebMode:', CS._isWebMode);
+        var focusedIndex = 0;
+
+        function replaceNewline() {
+            $('.withNewline').each(function (index) {
+                $(this).html($(this).html().trim().replace(/(?:\r\n|\r|\n)/g, "<br>"));
+            });
+        }
+
+        var minWidth = 240; //minimum dialog width in px
+        function setMaxWH() {
+            console.log('[errmsg] setMaxWH called');
+            const maxDisplayDimensions = CS.UI.getMaxDisplayDimensions();
+            console.log('[errmsg] maxDisplayDimensions:', maxDisplayDimensions);
+
+            $("#mContainer").css("min-width", minWidth);
+            $("#mContainer").css("max-width", maxDisplayDimensions.width);
+
+            $("#mContainer").css("max-height", maxDisplayDimensions.height);
+        }
+
+        function buildDialog() {
+            var template = $("#errmsgTemplate").html();
+            console.log('[errmsg] Template:', template.substring(0, 200));
+            console.log('[errmsg] Input for Mustache:', JSON.stringify(input));
+            var rendered = Mustache.render(template, input);
+            console.log('[errmsg] Rendered HTML (buttons section):', rendered.substring(rendered.indexOf('my-dialog-footer')));
+            $("#dialogDynamicContainer").html(rendered);
+
+            replaceNewline();
+        }
+
+        //Doing some stuff differently based on the OS
+        function osProfile() {
+            const onAndroid = ( navigator.userAgent.toLowerCase().indexOf("android") > -1 );
+            if (onAndroid) {
+                //hiding "x" button
+                $(".close").hide();
+
+                //hiding title if it's empty
+                if ($("#mTitle").children().first().html().trim().length == 0) {
+                    $("#mTitle").hide();
+                }
+            }
+            else {
+                minWidth = 480;
+            }
+        }
+
+        // Safe close function that checks if dialog is initialized
+        function closeDialogSafely() {
+            console.log('[errmsg] closeDialogSafely called, dialogFullyInitialized:', window.dialogFullyInitialized);
+            if (window.dialogFullyInitialized) {
+                CS.UI.closeDialog();
+            } else {
+                console.warn('[errmsg] closeDialogSafely blocked - dialog not yet initialized');
+            }
+        }
+
+        function dialogReturn(idx) {
+            console.log('[errmsg] dialogReturn called with index:', idx);
+            if (CS && CS.UI && typeof CS.UI.closeDialog === 'function') {
+                CS.UI.closeDialog({ result: { index: idx } });
+            } else {
+                console.error('[errmsg] CS.UI.closeDialog not available, using postMessage directly');
+                window.parent.postMessage({
+                    type: 'cspro-dialog-close',
+                    result: { result: { index: idx } }
+                }, '*');
+            }
+        }
+
+        function adjustButtonsHeight() {
+            // Guard: ensure input and buttons exist
+            if (!window.input || !window.input.buttons || !window.input.buttons.length) {
+                return;
+            }
+            
+            //finding tallest button
+            var tallestButton = 0;
+
+            for (var i = 0; i < input.buttons.length; i++) {
+                var bId = '#b' + (i + 1);
+                if ($(bId).outerHeight() > tallestButton) {
+                    tallestButton = $(bId).outerHeight();
+                }
+            }
+
+            //setting height to tallest
+            if (tallestButton > 0) {
+                for (var i = 0; i < input.buttons.length; i++) {
+                    var bId = '#b' + (i + 1);
+                    $(bId).css("height", tallestButton);
+                }
+            }
+        }
+
+        function setDefaultButton() {
+            // Guard: ensure input exists
+            if (!window.input) {
+                return;
+            }
+            
+            if (input.defaultButtonIndex > 0) {
+                focusedIndex = input.defaultButtonIndex;
+                setTimeout(function () {
+                    $("#b" + focusedIndex).focus();
+                }, 100);
+            }
+        }
+        
+        function finalizeDialog() {
+            adjustButtonsHeight();
+
+            setDefaultButton();
+
+            var w = $("#mContainer").outerWidth();
+            var h = $("#mContainer").outerHeight();
+            
+            console.log('[errmsg] finalizeDialog: calculated size w=' + w + ', h=' + h);
+
+            // In web mode, send size to parent to resize iframe
+            if (typeof CSProEnvironment !== 'undefined' && CSProEnvironment.isWebMode() && window.parent !== window) {
+                console.log('[errmsg] Sending resize message to parent');
+                window.parent.postMessage({
+                    type: 'cspro-dialog-resize',
+                    width: w + 20, // Add some padding
+                    height: h + 20
+                }, '*');
+            }
+
+            CS.UI.setDisplayOptions({
+                width: w,
+                height: h,
+                keyboard: false,
+                titleBarColor: $('.my-dialog-header').css('background-color')
+            });
+            
+            // Mark dialog as fully initialized - allow close/ESC now
+            window.dialogFullyInitialized = true;
+            console.log('[errmsg] Dialog fully initialized, close handlers enabled');
+        }
+
+        $(document).ready(function () {
+            console.log('[errmsg] Document ready, jQuery=$, Mustache=', typeof Mustache);
+            
+            // Signal ready to parent AFTER all scripts are loaded
+            if (typeof CSProEnvironment !== 'undefined' && CSProEnvironment.isWebMode() && window.parent !== window) {
+                console.log('[errmsg] Signaling dialog ready to parent');
+                window.parent.postMessage({ type: 'cspro-dialog-ready' }, '*');
+            }
+            
+            // Only run if input is already set (native mode)
+            // In web mode, finalizeDialog is called from initializeDialog
+            if (window.input && window.input.buttons) {
+                finalizeDialog();
+            }
+        });
+
+        // Flag to track if dialog is fully initialized
+        window.dialogFullyInitialized = false;
+        
+        $(document).keydown(function (e) {
+            if (e.keyCode === 27) { //ESC
+                console.log('[errmsg] ESC key pressed, dialogFullyInitialized:', window.dialogFullyInitialized);
+                if (window.dialogFullyInitialized) {
+                    CS.UI.closeDialog();
+                }
+            } else if (e.keyCode === 39 || e.keyCode === 40 || e.keyCode === 9) { //down arrow, right arrow, tab
+                focusedIndex++;
+                if (focusedIndex > input.buttons.length) {
+                    focusedIndex = 1;
+                }
+                $('#b' + focusedIndex).focus();
+                e.preventDefault();
+            } else if (e.keyCode === 37 || e.keyCode === 38) { //up arrow, left arrow
+                focusedIndex--;
+                if (focusedIndex < 1) {
+                    focusedIndex = input.buttons.length;
+                }
+                $('#b' + focusedIndex).focus();
+                e.preventDefault();
+            }
+        });
+    </script>
+</head>
+<body>
+    <!--Dialog container-->
+    <div id="dialogDynamicContainer" style="position:fixed;top:0;"></div>
+
+    <script>
+        // In web mode, we need to wait for input data via postMessage
+        // In native mode, CS.UI.getInputData() works immediately
+        function initializeDialog(inputData) {
+            window.input = inputData || {};
+            
+            // Extract message number from message if in "0020: Message text" format
+            if (input.message && typeof input.message === 'string') {
+                var match = input.message.match(/^(\d{4}):\s*/);
+                if (match) {
+                    input.messageNumber = match[1];
+                    input.message = input.message.substring(match[0].length);
+                }
+            }
+            
+            // Ensure buttons array exists with default OK button
+            if (!Array.isArray(input.buttons) || input.buttons.length === 0) {
+                input.buttons = [
+                    {
+                        caption: "OK",
+                        index: 1
+                    }
+                ];
+            }
+            
+            // Calculate button column split (for Bootstrap grid)
+            var split = Math.floor(12 / input.buttons.length);
+            var btnType = input.buttons.length > 1 ? "col-12" : "";
+            var btnAlign = input.buttons.length > 1 ? "text-center" : "text-end";
+
+            // Add index and styling to each button (Mustache needs them inside the buttons array)
+            input.buttons.forEach(function(btn, i) {
+                if (btn.index === undefined) {
+                    btn.index = i + 1;
+                }
+                // Add styling properties to each button for Mustache
+                btn.split = split;
+                btn.btnType = btnType;
+                btn.btnAlign = btnAlign;
+            });
+
+            // Also set on input for backwards compatibility
+            input.split = split;
+            input.btnType = btnType;
+            input.btnAlign = btnAlign;
+            
+            console.log('[errmsg] Building dialog with buttons:', JSON.stringify(input.buttons));
+
+            buildDialog();
+
+            osProfile();
+
+            setMaxWH();
+
+            $("#mContainer").css("width", $("#mWidth").outerWidth());
+
+            $("#mWidth").hide();
+            
+            // Finalize dialog after a short delay to allow DOM to update
+            setTimeout(function() {
+                finalizeDialog();
+            }, 50);
+        }
+        
+        // Use CSProEnvironment.isWebMode() from unified action-invoker.js
+        if (typeof CSProEnvironment !== 'undefined' && CSProEnvironment.isWebMode()) {
+            // Web mode - wait for data from parent via cspro-input-ready event or postMessage
+            window.addEventListener('cspro-input-ready', function(event) {
+                var input = event.detail?.inputData || CS.UI.getInputData() || {};
+                initializeDialog(input);
+            });
+            
+            // Also listen for postMessage from WasmDialogBridge iframe integration
+            window.addEventListener('message', function(event) {
+                if (event.data && event.data.type === 'cspro-dialog-input') {
+                    console.log('[errmsg] Received input data via postMessage:', event.data.input);
+                    console.log('[errmsg] jQuery available:', typeof $ !== 'undefined');
+                    console.log('[errmsg] Mustache available:', typeof Mustache !== 'undefined');
+                    if (typeof $ === 'undefined') {
+                        console.error('[errmsg] jQuery not loaded! Waiting...');
+                        // Wait for jQuery to load
+                        var checkInterval = setInterval(function() {
+                            if (typeof $ !== 'undefined' && typeof Mustache !== 'undefined') {
+                                clearInterval(checkInterval);
+                                console.log('[errmsg] jQuery and Mustache now available, initializing dialog');
+                                initializeDialog(event.data.input || {});
+                            }
+                        }, 50);
+                    } else {
+                        initializeDialog(event.data.input || {});
+                    }
+                }
+            });
+            
+            // Also check if already initialized
+            if (typeof CSProActionInvokerWebState !== 'undefined' && CSProActionInvokerWebState.initialized) {
+                initializeDialog(CS.UI.getInputData() || {});
+            }
+        } else {
+            // Native mode - get data directly
+            var input = CS.UI.getInputData();
+            initializeDialog(input || {});
+        }
+    </script>
+</body>
+</html>

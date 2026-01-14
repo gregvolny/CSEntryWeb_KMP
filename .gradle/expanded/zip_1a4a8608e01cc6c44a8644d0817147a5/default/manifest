@@ -1,0 +1,10 @@
+abi_version=1.8.0
+builtins_platform=WASM
+compiler_version=1.9.24
+depends=kotlin
+ir_signature_versions=1,2
+jsOutputName=kotlinx-browser-wasm-js
+metadata_version=1.4.1
+serializedIrFileFingerprints=qttqq9tzqnav.61pqaimkf082 k6o6ytg4o585.3u0casgv15axq 1rnlw8gpntend.8llh9tqpypw3 cle5zrcsvzzd.2a5hzrs7qa2en rhb9mw5zgreq.2cw8xiphd2c8j 22w0jhs8t2pzt.eynvylt8e0zr 3908uzaw4mova.snnwp51cu9k 3qg9798zj70ez.2t5f8k9lzjs8n 1xnyahcysppw7.2mx0xd8bt9uq9 1yi101gu4zr4t.18odouux8hww8 2208w09s0y5y8.1v8uku1ocnq37 3qwi7na8s5wr2.tlww19hsxiqp 2cp7gkw7hu0u6.1o5monlc0gtu3 ff6ze84cv16d.22ve4gb28l1bi 1poj9gnyhq87u.tcszhkobhj13 fovofd2audhw.29gx73r1za8lk 1btg3csgy4k98.3rjzck22ol32e hggldkh5o9uf.36ubjocciliky 3mg3m7x9jrkgl.2wdsbv7mesaso kaa66ji30nf9.vtob7sgut5k2 2goflmw7lkrha.2q9hhs7z9lrrx 18m24fz80pnby.22h6ajt7s0cto 3ld39v49bt8r6.gu8zw7x47hqy h4kvthyndnpf.3icytw8uxzk0g 2c1ezjje70fvj.39q06cih6oi8m 1hf0x288hwfo1.2kpr0xv5x2b97 2t9huormsd2si.ob001rausi5j
+serializedKlibFingerprint=2xh82lo2tc69l.20cnfxvcyk671
+unique_name=org.jetbrains.kotlinx\:kotlinx-browser

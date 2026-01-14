@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <!-- Unified Action invoker - auto-detects environment -->
+    <script src="../action-invoker.js"></script>
+    <script>
+        // Create global CS instance - unified action-invoker handles environment detection
+        window.CS = new CSProActionInvoker('');
+        
+        // Signal ready to parent (for web mode iframe dialogs)
+        if (CSProEnvironment.isWebMode() && window.parent !== window) {
+            window.parent.postMessage({ type: 'cspro-dialog-ready' }, '*');
+        }
+    </script>
+    <script src="/external/jquery/jquery.min.js"></script>
+
+    <title>CSPro Image Viewer</title>
+
+    <style>
+        img {
+            max-width: 95%;
+            max-height: 95%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+    <img id="image" onclick="closeDialog();" />
+
+    <script>
+        // CS already created above in unified block
+        // For web mode, listen for input data
+        if (CSProEnvironment.isWebMode() && window.parent !== window) {
+            console.log('[Image-view] Waiting for cspro-input-ready event');
+            
+            // Listen for initialization message from parent via cspro-input-ready event
+            window.addEventListener('cspro-input-ready', (event) => {
+                console.log('[Image-view] Received cspro-input-ready:', event.detail);
+                initializeImageViewDialog();
+            });
+            
+            // Check if already initialized
+            if (typeof CSProActionInvokerWebState !== 'undefined' && CSProActionInvokerWebState.initialized) {
+                initializeImageViewDialog();
+            }
+        } else {
+            // Native mode - initialize immediately
+            initializeImageViewDialog();
+        }
+        
+        function initializeImageViewDialog() {
+            let input = CS.UI.getInputData();
+            console.log('[Image-view] Input data:', input);
+
+            $(document).prop("title", input.title);
+            $("#image").attr("src", input.url);
+
+            // size the dialog to fit the image
+            let dimensions = CS.UI.getMaxDisplayDimensions();
+
+            if( input.width != undefined ) {
+                const adjustedImageWidth = input.width / 0.95;
+                const adjustedImageHeight = input.height / 0.95;
+
+                const dialogRatio = dimensions.width / dimensions.height;
+                const imageRatio = adjustedImageWidth / adjustedImageHeight;
+
+                if( imageRatio >= dialogRatio ) {
+                    dimensions.width = Math.min(adjustedImageWidth, dimensions.width);
+                    dimensions.height = dimensions.width / imageRatio;
+                }
+                else {
+                    dimensions.height = Math.min(adjustedImageHeight, dimensions.height);
+                    dimensions.width = dimensions.height * imageRatio;
+                }
+            }
+
+            CS.UI.setDisplayOptions({
+                width: dimensions.width,
+                height: dimensions.height,
+                keyboard: false
+            });
+        }
+
+        // close the dialog on the Enter and Escape keys
+        $(document).keydown((e) => {
+            if( e.keyCode === 13 || e.keyCode === 27 ) {
+                closeDialog();
+            }
+        });
+
+        function closeDialog() {
+            CS.UI.closeDialog({ result: { } });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSPro Engine Integration Verification</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        h1 {
+            color: #488840;
+            border-bottom: 3px solid #488840;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #0066cc;
+            margin-top: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .architecture {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Fira Code', Monaco, monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+        .btn {
+            background: #488840;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #3d7838;
+        }
+        .btn-secondary {
+            background: #0066cc;
+        }
+        .btn-secondary:hover {
+            background: #0052a3;
+        }
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .test-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #ddd;
+        }
+        .test-item.pass {
+            border-left-color: #28a745;
+        }
+        .test-item.fail {
+            border-left-color: #dc3545;
+        }
+        .test-item .icon {
+            font-size: 20px;
+        }
+        .log {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log .error {
+            color: #ff6b6b;
+        }
+        .log .warn {
+            color: #ffc107;
+        }
+        .log .info {
+            color: #17a2b8;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f0f0f0;
+        }
+        .size {
+            font-family: monospace;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 CSPro Engine Integration Verification</h1>
+    
+    <div class="card">
+        <h2>Architecture Overview</h2>
+        <div class="architecture">
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        KOTLIN/WASM UI LAYER                             │
+│                      (csentry-web.wasm ~140KB)                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Main.kt → ActivityRouter → EntryActivity → QuestionnaireFragment       │
+│                              ↓                                          │
+│                    CSProEngineService.kt                                │
+│                    (Singleton engine bridge)                            │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │
+                               │ JS Interop (external declarations)
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        EMSCRIPTEN LAYER                                 │
+│                       (CSPro.js ~17MB)                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  createCSProModule() → Module with:                                     │
+│    - CSProEngine class (Embind)                                         │
+│    - FS (Emscripten filesystem)                                         │
+│    - JSPI async support                                                 │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │
+                               │ Embind bindings (WASMBindings.cpp)
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      C++ CSPRO ENGINE                                   │
+│                   (CSPro.wasm ~27MB)                                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│  CSProEngine wrapper class:                                             │
+│    - initApplication(pffPath)                                           │
+│    - start() → getCurrentPage()                                         │
+│    - nextField() / previousField()                                      │
+│    - setFieldValueAndAdvance(value)                                     │
+│    - evalLogic(expression)                                              │
+│    - processAction(action, args)                                        │
+│                              ↓                                          │
+│               CoreEntryEngineInterface                                  │
+│                 (Full CSPro logic engine)                               │
+└─────────────────────────────────────────────────────────────────────────┘
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>File Verification</h2>
+        <div id="fileStatus">
+            <span class="status loading">⏳ Checking files...</span>
+        </div>
+        <table id="fileTable" style="display: none;">
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th>Status</th>
+                    <th>Size</th>
+                </tr>
+            </thead>
+            <tbody id="fileTableBody"></tbody>
+        </table>
+    </div>
+    
+    <div class="card">
+        <h2>Integration Tests</h2>
+        <button class="btn" id="runTests">▶ Run All Tests</button>
+        <button class="btn btn-secondary" id="testModule">Test Module Load</button>
+        <button class="btn btn-secondary" id="testEngine">Test Engine Create</button>
+        
+        <div id="testResults" style="margin-top: 20px;"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Console Log</h2>
+        <div id="logOutput" class="log">
+            Waiting for tests...
+        </div>
+    </div>
+    
+    <script type="module">
+        // Log capture
+        const logOutput = document.getElementById('logOutput');
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        function appendLog(msg, className = '') {
+            const line = document.createElement('div');
+            line.className = className;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logOutput.appendChild(line);
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+        
+        console.log = (...args) => {
+            originalLog.apply(console, args);
+            appendLog(args.join(' '));
+        };
+        console.error = (...args) => {
+            originalError.apply(console, args);
+            appendLog(args.join(' '), 'error');
+        };
+        console.warn = (...args) => {
+            originalWarn.apply(console, args);
+            appendLog(args.join(' '), 'warn');
+        };
+        
+        // File verification
+        async function checkFiles() {
+            try {
+                const response = await fetch('/api/verify-integration');
+                const data = await response.json();
+                
+                const fileStatus = document.getElementById('fileStatus');
+                const fileTable = document.getElementById('fileTable');
+                const fileTableBody = document.getElementById('fileTableBody');
+                
+                const files = [
+                    { name: 'CSPro.js (Emscripten)', exists: data.csproJsExists, size: data.csproJsSize },
+                    { name: 'CSPro.wasm (C++ Engine)', exists: data.csproWasmExists, size: data.csproWasmSize },
+                    { name: 'CSPro.data (Preloaded files)', exists: data.csproDataExists, size: 0 },
+                    { name: 'csentry-web.wasm (Kotlin UI)', exists: data.kotlinWasmExists, size: data.kotlinWasmSize },
+                    { name: 'csentry-web.js (Kotlin loader)', exists: data.kotlinJsExists, size: 0 }
+                ];
+                
+                fileTableBody.innerHTML = files.map(f => `
+                    <tr>
+                        <td>${f.name}</td>
+                        <td>${f.exists ? '✅ Found' : '❌ Missing'}</td>
+                        <td class="size">${f.size > 0 ? formatBytes(f.size) : '-'}</td>
+                    </tr>
+                `).join('');
+                
+                fileTable.style.display = 'table';
+                
+                if (data.allFilesPresent) {
+                    fileStatus.innerHTML = '<span class="status success">✓ All required files present</span>';
+                } else {
+                    fileStatus.innerHTML = '<span class="status error">✗ Some files are missing</span>';
+                }
+                
+                console.log('File verification complete:', data);
+            } catch (e) {
+                document.getElementById('fileStatus').innerHTML = 
+                    `<span class="status error">✗ Verification failed: ${e.message}</span>`;
+                console.error('File verification failed:', e);
+            }
+        }
+        
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        
+        // Test state
+        let csproModule = null;
+        let csproEngine = null;
+        
+        // Test functions
+        async function testModuleLoad() {
+            console.log('Testing CSPro module load...');
+            try {
+                const module = await import('/CSPro.js');
+                console.log('Module imported, exports:', Object.keys(module));
+                
+                if (module.default) {
+                    console.log('Creating module instance...');
+                    csproModule = await module.default();
+                    console.log('Module created:', typeof csproModule);
+                    console.log('Module has CSProEngine:', !!csproModule?.CSProEngine);
+                    console.log('Module has FS:', !!csproModule?.FS);
+                    return { success: true, hasEngine: !!csproModule?.CSProEngine };
+                } else {
+                    console.error('No default export from CSPro.js');
+                    return { success: false, error: 'No default export' };
+                }
+            } catch (e) {
+                console.error('Module load failed:', e);
+                return { success: false, error: e.message };
+            }
+        }
+        
+        async function testEngineCreate() {
+            console.log('Testing CSProEngine instantiation...');
+            try {
+                if (!csproModule) {
+                    console.log('Module not loaded, loading first...');
+                    await testModuleLoad();
+                }
+                
+                if (!csproModule?.CSProEngine) {
+                    return { success: false, error: 'CSProEngine not available' };
+                }
+                
+                console.log('Creating CSProEngine instance...');
+                csproEngine = new csproModule.CSProEngine();
+                console.log('Engine created:', typeof csproEngine);
+                
+                // Check available methods
+                const methods = [];
+                for (let key in csproEngine) {
+                    if (typeof csproEngine[key] === 'function') {
+                        methods.push(key);
+                    }
+                }
+                console.log('Engine methods:', methods.join(', '));
+                
+                return { success: true, methods };
+            } catch (e) {
+                console.error('Engine creation failed:', e);
+                return { success: false, error: e.message };
+            }
+        }
+        
+        async function testEngineMethods() {
+            console.log('Testing engine methods...');
+            
+            if (!csproEngine) {
+                await testEngineCreate();
+            }
+            
+            if (!csproEngine) {
+                return { success: false, error: 'Engine not available' };
+            }
+            
+            const results = {};
+            
+            // Test getCurrentPage (sync)
+            try {
+                console.log('Testing getCurrentPage...');
+                const page = csproEngine.getCurrentPage();
+                results.getCurrentPage = { success: true, result: page };
+                console.log('getCurrentPage result:', page);
+            } catch (e) {
+                results.getCurrentPage = { success: false, error: e.message };
+                console.error('getCurrentPage failed:', e);
+            }
+            
+            // Test isSystemControlled (sync)
+            try {
+                console.log('Testing isSystemControlled...');
+                const sc = csproEngine.isSystemControlled();
+                results.isSystemControlled = { success: true, result: sc };
+                console.log('isSystemControlled result:', sc);
+            } catch (e) {
+                results.isSystemControlled = { success: false, error: e.message };
+            }
+            
+            // Test getStopCode (sync)
+            try {
+                console.log('Testing getStopCode...');
+                const code = csproEngine.getStopCode();
+                results.getStopCode = { success: true, result: code };
+                console.log('getStopCode result:', code);
+            } catch (e) {
+                results.getStopCode = { success: false, error: e.message };
+            }
+            
+            return results;
+        }
+        
+        async function runAllTests() {
+            const resultsDiv = document.getElementById('testResults');
+            resultsDiv.innerHTML = '<div class="status loading">⏳ Running tests...</div>';
+            
+            const tests = [
+                { name: 'CSPro.js Module Load', fn: testModuleLoad },
+                { name: 'CSProEngine Instantiation', fn: testEngineCreate },
+                { name: 'Engine Methods Available', fn: testEngineMethods }
+            ];
+            
+            let html = '';
+            let passed = 0;
+            let failed = 0;
+            
+            for (const test of tests) {
+                try {
+                    const result = await test.fn();
+                    const success = result?.success !== false;
+                    html += `
+                        <div class="test-item ${success ? 'pass' : 'fail'}">
+                            <span><span class="icon">${success ? '✓' : '✗'}</span> ${test.name}</span>
+                            <span>${success ? 'PASS' : result?.error || 'FAIL'}</span>
+                        </div>
+                    `;
+                    if (success) passed++; else failed++;
+                } catch (e) {
+                    html += `
+                        <div class="test-item fail">
+                            <span><span class="icon">✗</span> ${test.name}</span>
+                            <span>${e.message}</span>
+                        </div>
+                    `;
+                    failed++;
+                }
+            }
+            
+            const summary = passed === tests.length 
+                ? `<div class="status success">✓ All ${passed} tests passed - Integration verified!</div>`
+                : `<div class="status ${failed > 0 && passed > 0 ? 'pending' : 'error'}">
+                     ${passed} passed, ${failed} failed
+                   </div>`;
+            
+            resultsDiv.innerHTML = summary + html;
+        }
+        
+        // Event listeners
+        document.getElementById('runTests').addEventListener('click', runAllTests);
+        document.getElementById('testModule').addEventListener('click', async () => {
+            const result = await testModuleLoad();
+            document.getElementById('testResults').innerHTML = 
+                `<div class="status ${result.success ? 'success' : 'error'}">
+                    ${result.success ? '✓ Module loaded successfully' : '✗ ' + result.error}
+                </div>`;
+        });
+        document.getElementById('testEngine').addEventListener('click', async () => {
+            const result = await testEngineCreate();
+            document.getElementById('testResults').innerHTML = 
+                `<div class="status ${result.success ? 'success' : 'error'}">
+                    ${result.success ? '✓ Engine created successfully' : '✗ ' + result.error}
+                </div>`;
+        });
+        
+        // Initial file check
+        checkFiles();
+        console.log('Integration verification page loaded');
+    </script>
+</body>
+</html>

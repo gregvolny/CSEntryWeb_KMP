@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#488840">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="CSEntry">
+    <meta name="description" content="CSEntry Web - Data collection application for surveys and censuses">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <title>CSEntry Web Application</title>
+    
+    <!-- PWA Manifest - DISABLED for development -->
+    <!-- <link rel="manifest" href="/manifest.json"> -->
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Icons (with SVG fallback) -->
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+    <link rel="mask-icon" href="/icons/icon.svg" color="#488840">
+    
+    <!-- CSEntry KMP WASM Engine loaded via csentryKMP-loader.js -->
+    
+    <!-- Offline Status Indicator Styles -->
+    <style>
+        .offline-indicator {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #f44336;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-weight: bold;
+            z-index: 10001;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s ease-out;
+        }
+        .offline-indicator.show {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .offline-indicator::before {
+            content: '📡';
+        }
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+        
+        .update-banner {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #2196F3;
+            color: white;
+            padding: 12px 20px;
+            text-align: center;
+            z-index: 10002;
+            animation: slideDown 0.3s ease-out;
+        }
+        .update-banner.show {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+        }
+        .update-banner button {
+            background: white;
+            color: #2196F3;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .update-banner button:hover {
+            background: #f0f0f0;
+        }
+        @keyframes slideDown {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(0); }
+        }
+        
+        .install-prompt {
+            display: none;
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 10001;
+            max-width: 320px;
+            text-align: center;
+        }
+        .install-prompt.show {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+        .install-prompt h3 {
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+        .install-prompt p {
+            margin: 0 0 16px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .install-prompt .buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+        .install-prompt button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .install-prompt .install-btn {
+            background: #488840;
+            color: white;
+            border: none;
+        }
+        .install-prompt .dismiss-btn {
+            background: white;
+            color: #666;
+            border: 1px solid #ddd;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-50%) scale(0.95); }
+            to { opacity: 1; transform: translateX(-50%) scale(1); }
+        }
+    </style>
+    <!-- CSEntry Logger - sends logs to server for file storage -->
+    <script src="/csentry-logger.js"></script>
+</head>
+<body>
+    <div id="app">
+        <div class="loading" style="text-align:center;padding:40px;">Loading CSEntry...</div>
+    </div>
+    
+    <!-- Offline Indicator -->
+    <div id="offlineIndicator" class="offline-indicator">
+        You are offline
+    </div>
+    
+    <!-- Update Banner -->
+    <div id="updateBanner" class="update-banner">
+        <span>A new version is available!</span>
+        <button onclick="updateApp()">Update Now</button>
+    </div>
+    
+    <!-- Install Prompt -->
+    <div id="installPrompt" class="install-prompt">
+        <h3>📱 Install CSEntry</h3>
+        <p>Install this application on your device for faster access and offline use.</p>
+        <div class="buttons">
+            <button class="dismiss-btn" onclick="dismissInstallPrompt()">Not now</button>
+            <button class="install-btn" onclick="installApp()">Install</button>
+        </div>
+    </div>
+    
+    <!-- Service Worker & PWA Setup - DISABLED for development -->
+    <script>
+        // Deferred install prompt
+        let deferredInstallPrompt = null;
+        let serviceWorkerRegistration = null;
+        
+        // DISABLED: Unregister any existing service workers for clean development
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                for (const registration of registrations) {
+                    registration.unregister();
+                    console.log('🧹 Service Worker unregistered for development');
+                }
+            });
+            // Clear all caches
+            if ('caches' in window) {
+                caches.keys().then(names => {
+                    for (const name of names) {
+                        caches.delete(name);
+                        console.log('🧹 Cache deleted:', name);
+                    }
+                });
+            }
+        }
+        
+        /*
+        // Register Service Worker - DISABLED
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', async () => {
+                try {
+                    serviceWorkerRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+                    console.log('✅ Service Worker registered:', serviceWorkerRegistration.scope);
+                    
+                    // Check for updates
+                    serviceWorkerRegistration.addEventListener('updatefound', () => {
+                        const newWorker = serviceWorkerRegistration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                // New service worker available
+                                document.getElementById('updateBanner').classList.add('show');
+                            }
+                        });
+                    });
+                    
+                    // Check for waiting worker on page load
+                    if (serviceWorkerRegistration.waiting) {
+                        document.getElementById('updateBanner').classList.add('show');
+                    }
+                } catch (error) {
+                    console.error('❌ Service Worker registration failed:', error);
+                }
+            });
+            
+            // Handle controller change (refresh after update)
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                window.location.reload();
+            });
+        }
+        */
+        
+        // Offline/Online Detection
+        function updateOnlineStatus() {
+            const indicator = document.getElementById('offlineIndicator');
+            if (navigator.onLine) {
+                indicator.classList.remove('show');
+                console.log('📶 Online');
+            } else {
+                indicator.classList.add('show');
+                console.log('📴 Offline');
+            }
+        }
+        
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        updateOnlineStatus(); // Initial check
+        
+        // Install Prompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredInstallPrompt = e;
+            
+            // Show install prompt after a delay (don't be too aggressive)
+            setTimeout(() => {
+                const dismissed = localStorage.getItem('installPromptDismissed');
+                if (!dismissed && deferredInstallPrompt) {
+                    document.getElementById('installPrompt').classList.add('show');
+                }
+            }, 30000); // Show after 30 seconds
+        });
+        
+        window.addEventListener('appinstalled', () => {
+            console.log('✅ App installed');
+            deferredInstallPrompt = null;
+            document.getElementById('installPrompt').classList.remove('show');
+        });
+        
+        async function installApp() {
+            if (!deferredInstallPrompt) return;
+            
+            deferredInstallPrompt.prompt();
+            const result = await deferredInstallPrompt.userChoice;
+            console.log('Install prompt result:', result.outcome);
+            
+            document.getElementById('installPrompt').classList.remove('show');
+            deferredInstallPrompt = null;
+        }
+        
+        function dismissInstallPrompt() {
+            document.getElementById('installPrompt').classList.remove('show');
+            localStorage.setItem('installPromptDismissed', Date.now());
+        }
+        
+        function updateApp() {
+            if (serviceWorkerRegistration && serviceWorkerRegistration.waiting) {
+                serviceWorkerRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+        }
+        
+        // Expose PWA functions to Kotlin
+        window.CSEntryPWA = {
+            canInstall: () => deferredInstallPrompt !== null,
+            install: installApp,
+            isOnline: () => navigator.onLine,
+            isStandalone: () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true,
+            requestSync: (tag = 'csentry-data-sync') => {
+                if (serviceWorkerRegistration && serviceWorkerRegistration.sync) {
+                    return serviceWorkerRegistration.sync.register(tag);
+                }
+                return Promise.reject('Background sync not supported');
+            },
+            clearCaches: () => {
+                if (navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
+                }
+            },
+            update: () => {
+                if (serviceWorkerRegistration) {
+                    return serviceWorkerRegistration.update();
+                }
+                return Promise.reject('No service worker');
+            }
+        };
+    </script>
+    
+    <!-- SQLite Settings Store - Must load before Kotlin module for persistent settings -->
+    <script src="/sqlite-settings-store.js" type="module"></script>
+    
+    <!-- Load CSEntry KMP WASM engine loader (sets window.createCSEntryKMPModule) -->
+    <script src="/wasm/csentryKMP-loader.js" type="module"></script>
+    
+    <!-- Load Kotlin/Wasm bundle from webpack output -->
+    <script type="module">
+        // Check browser compatibility for WASM GC
+        function checkWasmGCSupport() {
+            try {
+                // Check for basic WASM GC feature detection
+                // WASM GC requires Chrome 119+ / Edge 119+ / Firefox 120+
+                const ua = navigator.userAgent;
+                const chromeMatch = ua.match(/Chrome\/(\d+)/);
+                const firefoxMatch = ua.match(/Firefox\/(\d+)/);
+                const edgeMatch = ua.match(/Edg\/(\d+)/);
+                
+                if (chromeMatch && parseInt(chromeMatch[1]) >= 119) return { supported: true };
+                if (edgeMatch && parseInt(edgeMatch[1]) >= 119) return { supported: true };
+                if (firefoxMatch && parseInt(firefoxMatch[1]) >= 120) return { supported: true };
+                
+                // Check for WebAssembly GC types
+                if (typeof WebAssembly === 'object' && typeof WebAssembly.validate === 'function') {
+                    return { supported: true, note: 'WASM available, GC support varies' };
+                }
+                
+                return { supported: false, reason: 'Browser may not support WASM GC' };
+            } catch (e) {
+                return { supported: false, reason: e.message };
+            }
+        }
+        
+        const wasmCheck = checkWasmGCSupport();
+        if (!wasmCheck.supported) {
+            console.warn('⚠️ Browser WASM GC support:', wasmCheck.reason);
+            console.warn('   CSEntry Web requires Chrome 119+, Edge 119+, or Firefox 120+');
+        }
+        
+        console.log('🚀 Loading CSEntry Web (Kotlin Multiplatform)...');
+        
+        // Initialize SQLite settings store early
+        if (window.sqliteSettingsStore) {
+            window.sqliteSettingsStore.initialize().then(() => {
+                console.log('✅ SQLite Settings Store initialized');
+            }).catch(err => {
+                console.warn('⚠️ SQLite Settings Store init error:', err);
+            });
+        }
+        
+        // ============================================================
+        // CSEntry KMP WASM Engine Loader
+        // Loads the full Android C++ CSPro engine compiled to WASM
+        // The external loader (csentryKMP-loader.js) sets window.createCSEntryKMPModule
+        // which is what webpack externals expects
+        // ============================================================
+        
+        // Wait for the external loader to complete if needed
+        async function waitForCSEntryKMP() {
+            if (window.createCSEntryKMPModule) {
+                return window.createCSEntryKMPModule;
+            }
+            return new Promise((resolve) => {
+                window.addEventListener('csentryKMPReady', (e) => {
+                    resolve(e.detail.factory);
+                }, { once: true });
+                // Timeout fallback - try direct import
+                setTimeout(async () => {
+                    if (!window.createCSEntryKMPModule) {
+                        console.log('⏳ Loader timeout, trying direct import...');
+                        const mod = await import('/wasm/csentryKMP.js');
+                        const factory = mod.default || mod.createCSEntryKMPModule;
+                        window.createCSEntryKMPModule = factory;
+                        resolve(factory);
+                    }
+                }, 3000);
+            });
+        }
+        
+        window.CSEntryKMP = {
+            _module: null,
+            _loadPromise: null,
+            _engine: null,
+            
+            // Load csentryKMP.js (Full Android C++ engine)
+            async loadModule() {
+                if (this._module) return this._module;
+                if (this._loadPromise) return this._loadPromise;
+                
+                console.log('📦 Loading CSEntry KMP WASM engine...');
+                this._loadPromise = (async () => {
+                    // Wait for the loader to fully initialize the module
+                    // The loader now calls the factory and exposes window.CSProModule
+                    let attempts = 0;
+                    const maxAttempts = 100; // 10 seconds
+                    
+                    while (attempts < maxAttempts) {
+                        // Check if module is already initialized by the loader
+                        if (window.CSProModule && typeof window.CSProModule === 'object') {
+                            const mod = window.CSProModule;
+                            console.log('📦 Got pre-initialized module from loader');
+                            console.log('📦 Module keys:', Object.keys(mod).slice(0, 30));
+                            console.log('📦 CSProEngine:', typeof mod.CSProEngine);
+                            
+                            if (mod.CSProEngine) {
+                                console.log('📦 ✅ CSProEngine class found!');
+                            } else {
+                                console.warn('📦 ⚠️ CSProEngine not found on module');
+                            }
+                            
+                            return mod;
+                        }
+                        
+                        // Wait a bit and try again
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        attempts++;
+                        
+                        if (attempts % 10 === 0) {
+                            console.log('📦 Waiting for module initialization...', attempts * 100, 'ms');
+                        }
+                    }
+                    
+                    console.error('📦 ❌ Module initialization timed out');
+                    throw new Error('CSEntry KMP WASM module failed to initialize');
+                })();
+                
+                this._loadPromise = this._loadPromise.then(wasmModule => {
+                    this._module = wasmModule;
+                    console.log('✅ CSEntry KMP WASM module ready');
+                    
+                    // Initialize the engine interface if available
+                    if (wasmModule && wasmModule.InitNativeEngineInterface) {
+                        console.log('🔧 Initializing native engine interface...');
+                        wasmModule.InitNativeEngineInterface();
+                    }
+                    
+                    return wasmModule;
+                }).catch(err => {
+                    console.error('❌ Failed to load CSEntry KMP WASM:', err);
+                    this._loadPromise = null;
+                    throw err;
+                });
+                
+                return this._loadPromise;
+            },
+            
+            // Get the loaded module
+            getModule() {
+                return this._module;
+            },
+            
+            // Create a new CSProEngine instance (OOP interface)
+            async createEngine() {
+                const mod = await this.loadModule();
+                if (mod && mod.CSProEngine) {
+                    console.log('🔧 Creating CSProEngine instance...');
+                    this._engine = new mod.CSProEngine();
+                    return this._engine;
+                }
+                throw new Error('CSProEngine class not found in module');
+            },
+            
+            // Get or create engine
+            async getEngine() {
+                if (this._engine) return this._engine;
+                return this.createEngine();
+            },
+            
+            // Check if engine is ready
+            isReady() {
+                return this._module !== null;
+            }
+        };
+        
+        // Legacy alias for compatibility
+        window.CSProEngine = window.CSEntryKMP;
+        
+        // Start loading CSEntry KMP engine immediately (don't block)
+        window.CSEntryKMP.loadModule().catch(e => {
+            console.warn('CSEntry KMP preload warning:', e.message);
+            console.log('💡 To build the WASM engine, run: .\\wasm-engine\\build-wasm.ps1');
+        });
+        
+        // Load the Kotlin/WASM UI bundle
+        try {
+            const module = await import('/csentry-web.js');
+            console.log('✅ Kotlin/WASM UI Module loaded. Exports:', Object.keys(module));
+        } catch (e) {
+            console.error('❌ Failed to load Kotlin/WASM UI:', e);
+            
+            // Check if it's a WASM GC compatibility error
+            const isWasmGCError = e.message && (
+                e.message.includes('ref.test') ||
+                e.message.includes('ref.cast') ||
+                e.message.includes('Invalid types') ||
+                e.message.includes('CompileError') ||
+                e.message.includes('Wasm GC')
+            );
+            
+            let errorHtml = '<div style="color:red;padding:20px;font-family:sans-serif;">' +
+                '<h2>Failed to Load Application</h2>';
+            
+            if (isWasmGCError) {
+                errorHtml += '<p><strong>Browser Compatibility Issue</strong></p>' +
+                    '<p>CSEntry Web requires a browser with full WASM GC support:</p>' +
+                    '<ul>' +
+                    '<li>Google Chrome 119 or later</li>' +
+                    '<li>Microsoft Edge 119 or later</li>' +
+                    '<li>Firefox 120 or later</li>' +
+                    '</ul>' +
+                    '<p>Please update your browser to the latest version.</p>';
+            } else {
+                errorHtml += '<p>' + e.message + '</p>';
+            }
+            
+            errorHtml += '<p style="color:#666;">Check the console for details.</p></div>';
+            document.getElementById('app').innerHTML = errorHtml;
+        }
+    </script>
+</body>
+</html>

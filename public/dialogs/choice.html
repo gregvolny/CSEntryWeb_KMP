@@ -1,0 +1,463 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, maximum-scale=1, minimum-scale=1, user-scalable=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="/external/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="/external/bootstrap/bootstrap-icons.css">
+    <link rel="stylesheet" href="/css/dialogs.css">
+
+    <!-- Unified Action invoker - auto-detects environment -->
+    <script src="../action-invoker.js"></script>
+    <script>
+        // Create global CS instance - unified action-invoker handles environment detection
+        window.CS = new CSProActionInvoker('');
+        
+        // Signal ready to parent (for web mode iframe dialogs)
+        if (CSProEnvironment.isWebMode() && window.parent !== window) {
+            window.parent.postMessage({ type: 'cspro-dialog-ready' }, '*');
+        }
+    </script>
+    <script src="/external/jquery/jquery.min.js"></script>
+    <script src="/external/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="/external/mustache/mustache.min.js"></script>
+
+    <title>Choice</title>
+
+    <style>
+        .my-list-item {
+            z-index: 1;
+            outline: none !important;
+            border-top-width: 1px !important;
+        }
+            .my-list-item:focus {
+                border-color: #777;
+                border-top: 1px solid #777 !important;
+            }
+    </style>
+
+    <script id="choiceTemplate" type="text/template">
+        <div id="mWidth" style="display:inline-block;">
+            <div>
+                <span class="col withNewline" style="white-space: nowrap;padding-right:48px;">{{title}}</span>
+            </div>
+            {{#choices}}
+            <div>
+                <span class="col withNewline" style="white-space: nowrap;background:#ddd;">{{caption}}</span>
+            </div>
+            {{/choices}}
+        </div>
+        <div id="mContainer" class="container-fluid my-dialog errmsg-dialog">
+            <div id="mTitle" class="row my-dialog-header">
+                <div class="col withNewline" id="mmTitle" style="padding-right:32px;">{{title}}</div>
+                <div class="btn-close my-close-button" aria-label="Close" onclick="CS.UI.closeDialog();">
+                </div>
+            </div>
+            {{#allowDirectInput}}
+            <div class="row" style="padding:8px 12px 4px 12px;margin:0;">
+                <div class="col-12" style="padding:0;">
+                    <div id="directInputContainer" style="position: relative; display: inline-block; margin: 0 auto;">
+                        <canvas id="directInputCanvas" style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; background: #ffffff;"></canvas>
+                        <input type="text" id="directInput" 
+                               style="font-family: Consolas, 'Courier New', monospace; font-size: 12px; position: relative; z-index: 2; background: transparent; border: 1px solid #808080; padding: 2px; box-sizing: border-box; height: 22px; color: #000000;" 
+                               autofocus>
+                    </div>
+                </div>
+            </div>
+            {{/allowDirectInput}}
+            {{^allowDirectInput}}
+            <div id="mBody" class="row my-dialog-body" style="overflow-y:auto;margin-top:0;margin-bottom:0;padding-top:0;padding-bottom:0;">
+                <div class="col-12">
+                    <div class="list-group my-input" id="list-tab" role="tablist">
+                        {{#choices}}
+                        <a id="i{{index}}" class="list-group-item list-group-item-action my-list-item withNewline" data-toggle="list" href="#" role="tab" aria-controls="{{caption}}" onclick="selectItem({{index}})">{{caption}}</a>
+                        {{/choices}}
+                    </div>
+                </div>
+            </div>
+            {{/allowDirectInput}}
+            <div id="mFooter" class="row text-center my-dialog-footer">
+                <div class="col my-dialog-button-col">
+                    <button class="btn btn-light col-12 text-center" id="okButton" type="button" onclick="dialogReturn(selectedIndex);" tabindex="-1">
+                        <span class="bi bi-check-lg"></span>
+                    </button>
+                </div>
+                <div class="col my-dialog-button-col">
+                    <button class="btn btn-light col-12 text-center" id="cancelButton" type="button" onclick="CS.UI.closeDialog();" tabindex="-1">
+                        <span class="bi bi-x-lg" style="color:#500;"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </script>
+
+    <script>
+        // CS is set globally either by web shim above or native action-invoker.js
+        var selectedIndex = -1;
+        var focusedIndex = -1;
+        var firstFocus = true;
+        var tabItems = [];
+        var tabFocusIndex = 0;
+        const onAndroid = ( navigator.userAgent.toLowerCase().indexOf("android") > -1 );
+
+
+        var maxHeight = 160;
+        function setMaxWH() {
+            const minWidth = 320; //minimum dialog width in px
+            const maxDisplayDimensions = CS.UI.getMaxDisplayDimensions()
+
+            $("#mContainer").css("min-width", minWidth);
+            $("#mContainer").css("max-width", maxDisplayDimensions.width);
+
+            maxHeight = maxDisplayDimensions.height;
+            $("#mContainer").css("max-height", maxHeight);
+        }
+
+        function buildDialog(input) {
+            console.log('[choice.html] Building dialog with input:', input);
+            console.log('[choice.html] allowDirectInput:', input.allowDirectInput);
+            var template = $("#choiceTemplate").html();
+            $("#dialogDynamicContainer").html(Mustache.render(template, input));
+        }
+
+        //Doing some stuff differently based on the OS
+        function osProfile() {
+            if (onAndroid) {
+                //hiding "x" button
+                $(".close").hide();
+
+                //hiding title if it's empty
+                if($("#mTitle").children().first().html().trim().length == 0) {
+                    $("#mTitle").hide();
+                }
+            }
+        }
+
+        function dialogReturn(idx) {
+            // Check if we have direct input value
+            var directInputElem = document.getElementById('directInput');
+            if (directInputElem && directInputElem.value.trim() !== '') {
+                // Return direct input value
+                CS.UI.closeDialog({ result: { value: directInputElem.value.trim() } });
+            } else {
+                // Return selected index
+                CS.UI.closeDialog({ result: { index: idx } });
+            }
+        }
+
+        function replaceNewline() {
+            $('.withNewline').each(function (index) {
+                $(this).html($(this).html().trim().replace(/(?:\r\n|\r|\n)/g, "<br>"));
+            });
+        }
+
+        function setFocusedIndex() {
+            tabItems.pop();
+            tabItems.push($('#i' + focusedIndex)[0]);
+            tabFocusIndex = tabItems.length - 1;
+        }
+
+        function selectItem(idx) {
+            focusedIndex = idx;
+            setFocusedIndex();
+
+            if (selectedIndex>=0 && selectedIndex != idx){
+                let oldButton = document.getElementById("i" + selectedIndex);
+                oldButton.classList.remove("active");
+            }
+            let newButton = document.getElementById("i" + idx);
+            newButton.classList.add("active");
+
+            if (selectedIndex != idx) {
+                selectedIndex = idx;
+
+                $('#okButton').prop('disabled', false);
+                $('#okButton').css('color', '#050');
+            }
+            else {
+                dialogReturn(idx);
+            }
+        }
+
+        function setTabItems() {
+            tabItems.push($("#okButton")[0]);
+            tabItems.push($("#cancelButton")[0]);
+            tabItems.push($("#list-tab")[0]);
+        }
+
+        function cycleTab(isShift) {
+            while (true) {
+                if (!isShift) {
+                    tabFocusIndex++;
+                    if (tabFocusIndex >= tabItems.length) {
+                        tabFocusIndex = 0;
+                    }
+                }
+                else {
+                    tabFocusIndex--;
+                    if (tabFocusIndex < 0) {
+                        tabFocusIndex = tabItems.length - 1;
+                    }
+                }
+
+                if (!tabItems[tabFocusIndex].disabled) {
+                    tabItems[tabFocusIndex].focus();
+                    break;
+                }
+            }
+        }
+
+        function setFirstFocus() {
+            if (firstFocus) {
+                firstFocus = false;
+                $('#okButton').focus();
+                $('#okButton').select();
+                $('#okButton').prop('disabled', true);
+                $('#okButton').css('color', '#aaa');
+
+                focusedIndex = input.choices[0].index - 1;
+                if (input.defaultIndex >= 0) {
+                    for (var i = 0; i < input.choices.length; i++) {
+                        var obj = input.choices[i];
+                        if (obj.index == input.defaultIndex) {
+                            focusedIndex = obj.index;
+                            break;
+                        }
+                    }
+                }
+
+                if (focusedIndex >= input.choices[0].index) {
+                    $('#i' + focusedIndex).focus();
+                    $('#i' + focusedIndex).trigger('click');
+                    setFocusedIndex();
+                }
+            }
+        }
+
+
+        $(document).ready(function () {
+            var w = $("#mContainer").outerWidth();
+            var h = $("#mContainer").outerHeight();
+
+            setTabItems();
+
+            CS.UI.setDisplayOptions({
+                width: w,
+                height: h,
+                keyboard: false,
+                titleBarColor: $('.my-dialog-header').css('background-color')
+            });
+
+            if (onAndroid) {
+                setFirstFocus();
+            }
+
+            $(".my-list-item").focus(function () {
+                setFirstFocus();
+            })
+        });
+
+        $(document).keydown(function (e) {
+            var isShift;
+            if (window.event) {
+                isShift = !!window.event.shiftKey;
+            } else {
+                isShift = !!ev.shiftKey;
+            }
+
+            // Handle Enter key in direct input field
+            if (e.keyCode === 13 && document.activeElement && document.activeElement.id === 'directInput') {
+                dialogReturn(-1); // -1 indicates we're using direct input value
+                e.preventDefault();
+                return;
+            }
+
+            if (e.keyCode === 27) { //ESC
+                CS.UI.closeDialog();
+            }
+            else if (e.keyCode === 39 || e.keyCode === 40) { //down arrow, right arrow
+                // Skip list navigation if focused on direct input
+                if (document.activeElement && document.activeElement.id === 'directInput') {
+                    return;
+                }
+                focusedIndex++;
+                if (focusedIndex > input.choices[input.choices.length - 1].index) {
+                    focusedIndex = input.choices[0].index;
+                }
+                $('#i' + focusedIndex).focus();
+                setFocusedIndex();
+                e.preventDefault();
+            }
+            else if (e.keyCode === 37 || e.keyCode === 38) { //up arrow, left arrow
+                // Skip list navigation if focused on direct input
+                if (document.activeElement && document.activeElement.id === 'directInput') {
+                    return;
+                }
+                focusedIndex--;
+                if (focusedIndex < input.choices[0].index) {
+                    focusedIndex = input.choices[input.choices.length - 1].index;
+                }
+                $('#i' + focusedIndex).focus();
+                setFocusedIndex();
+                e.preventDefault();
+            }
+            else if (e.keyCode === 9) { //tab
+                cycleTab(isShift);
+                e.preventDefault();
+            }
+        });
+
+    </script>
+</head>
+<body>
+    <!--Dialog container-->
+    <div id="dialogDynamicContainer" style="position:fixed;top:0;"></div>
+
+    <script>
+        // Draw tick marks on canvas (matches MFC GridWnd.cpp tick mark logic)
+        function drawTickMarks(canvas, length, options = {}) {
+            const decimalPlaces = options.decimalPlaces || 0;
+            const ctx = canvas.getContext('2d');
+            const charWidth = 7.2; // Consolas monospace width at 12px
+            const canvasHeight = 22;
+            
+            // Account for left border (1px) and padding (2px)
+            const iLeft = 3;
+            
+            // Total width includes field length * charWidth + left offset
+            canvas.width = iLeft + (length * charWidth) + 4;
+            canvas.height = canvasHeight;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Tick marks are drawn BETWEEN characters (length - 1 marks)
+            // Per MFC logic: DrawLine(x, rcFld.bottom - 1, x, rcFld.bottom - iHeight/4);
+            const iBottom = canvasHeight - 1;
+            const iHeight = canvasHeight - 2;
+            let tickHeight = Math.floor(iHeight / 4);
+            if (tickHeight < 3) tickHeight = 3;
+            if (tickHeight > 6) tickHeight = 6;
+            const tickTop = iBottom - tickHeight;
+            
+            // Draw tick marks between character positions
+            for (let i = 0; i < length - 1; i++) {
+                // MFC formula: x = rcFld.left + 1 + (iIndex + 1) * (m_pDoc->GetCharWidth())
+                const x = iLeft + (i + 1) * charWidth;
+                
+                // Highlight decimal position with different color (red) and thicker line
+                const isDecimalPosition = decimalPlaces > 0 && i === length - decimalPlaces - 1;
+                
+                if (isDecimalPosition) {
+                    ctx.strokeStyle = '#FF0000';  // Red for decimal position
+                    ctx.lineWidth = 2;
+                } else {
+                    ctx.strokeStyle = '#808080';  // Gray for regular tick marks
+                    ctx.lineWidth = 1;
+                }
+                
+                ctx.beginPath();
+                ctx.moveTo(Math.floor(x) + 0.5, iBottom);
+                ctx.lineTo(Math.floor(x) + 0.5, tickTop);
+                ctx.stroke();
+            }
+        }
+
+        // Initialize dialog function
+        function initializeChoiceDialog(inputData) {
+            window.input = inputData;
+            
+            if (!input) {
+                console.error('[choice.html] No input data provided');
+                return;
+            }
+
+            buildDialog(input);
+
+            replaceNewline();
+
+            osProfile();
+
+            setMaxWH();
+
+            $("#mContainer").css("width", $("#mWidth").outerWidth());
+            $("#mBody").css("height", $("#mContainer").outerHeight() - $("#mTitle").outerHeight() - $("#mFooter").outerHeight() - 8 );
+
+            var curHeight = $('#mContainer').outerHeight() + 9;
+            if (curHeight < maxHeight) {
+                $("#mBody").css('overflow-y','hidden');
+            }
+
+            $("#mWidth").hide();
+            
+            // Setup direct input field if present
+            if (input.allowDirectInput) {
+                const directInput = document.getElementById('directInput');
+                const canvas = document.getElementById('directInputCanvas');
+                const container = document.getElementById('directInputContainer');
+                
+                console.log('[choice.html] Setting up direct input, fieldLength:', input.fieldLength, 'decimalPlaces:', input.decimalPlaces);
+                
+                if (directInput && canvas && container) {
+                    const fieldLength = input.fieldLength || 3;
+                    const decimalPlaces = input.decimalPlaces || 0;
+                    const charWidth = 7.2;
+                    const iLeft = 3; // Left border + padding
+                    
+                    // Set maxLength including decimal point
+                    directInput.maxLength = fieldLength + (decimalPlaces > 0 ? 1 : 0);
+                    
+                    // Calculate width: left offset + (fieldLength * charWidth) + right padding
+                    const inputWidth = iLeft + (fieldLength * charWidth) + 4;
+                    directInput.style.width = inputWidth + 'px';
+                    container.style.width = inputWidth + 'px';
+                    canvas.style.width = inputWidth + 'px';
+                    
+                    // Set font and padding to match MFC field rendering
+                    directInput.style.font = '12px Consolas, monospace';
+                    directInput.style.paddingLeft = iLeft + 'px';
+                    directInput.style.paddingRight = '2px';
+                    
+                    console.log('[choice.html] Input width set to:', inputWidth + 'px');
+                    
+                    // Draw tick marks if numeric
+                    if (input.showTickMarks) {
+                        console.log('[choice.html] Drawing tick marks');
+                        drawTickMarks(canvas, fieldLength, { decimalPlaces });
+                    }
+                    
+                    // Set default value if provided
+                    if (input.currentValue !== undefined && input.currentValue !== null && input.currentValue !== '') {
+                        directInput.value = input.currentValue;
+                    }
+                } else {
+                    console.error('[choice.html] Could not find elements:', {
+                        directInput: !!directInput,
+                        canvas: !!canvas,
+                        container: !!container
+                    });
+                }
+            }
+        }
+        
+        // Initialize based on mode - use CSProEnvironment.isWebMode() from unified action-invoker.js
+        if (typeof CSProEnvironment !== 'undefined' && CSProEnvironment.isWebMode()) {
+            // Web mode - wait for data from parent via cspro-input-ready event
+            window.addEventListener('cspro-input-ready', function(event) {
+                var input = event.detail?.inputData || CS.UI.getInputData() || {};
+                initializeChoiceDialog(input);
+            });
+            // Also check if already initialized
+            if (typeof CSProActionInvokerWebState !== 'undefined' && CSProActionInvokerWebState.initialized) {
+                initializeChoiceDialog(CS.UI.getInputData() || {});
+            }
+        } else {
+            // Native mode - get data directly
+            var input = CS.UI.getInputData();
+            initializeChoiceDialog(input || {});
+        }
+    </script>
+</body>
+</html>

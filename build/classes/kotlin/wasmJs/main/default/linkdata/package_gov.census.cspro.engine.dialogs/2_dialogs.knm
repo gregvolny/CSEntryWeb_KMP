@@ -1,0 +1,391 @@
+
+ôc
+initDialogHandler
+kotlin
+Unit
+WasmDialogBridge.kt
+JsFun
+code
+F() => { window.CSProDialogHandler = window.CSProDialogHandler || {}; }
+registerDialogFunctions
+showDialogFn
+js
+JsAny
+showHtmlDialogFn
+showModalDialogFn
+ÐW
+(showDialogFn, showHtmlDialogFn, showModalDialogFn) => {
+    window.CSProDialogHandler = window.CSProDialogHandler || {};
+    
+    // Helper: Create and show an HTML dialog in an iframe overlay
+    window.CSProDialogHandler._showHtmlDialogInIframe = function(dialogPath, inputData) {
+        return new Promise((resolve, reject) => {
+            console.log("[WasmDialogBridge JS] Opening HTML dialog:", dialogPath, "with input:", inputData);
+            
+            // Create overlay container
+            const overlay = document.createElement('div');
+            overlay.id = 'cspro-dialog-overlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+            
+            // Create dialog container - set explicit initial height
+            const dialogContainer = document.createElement('div');
+            dialogContainer.id = 'cspro-dialog-container';
+            dialogContainer.style.cssText = 'background:white;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);max-width:90vw;max-height:90vh;overflow:hidden;min-width:300px;min-height:180px;width:500px;height:200px;';
+            
+            // Create iframe for dialog - explicit dimensions
+            const iframe = document.createElement('iframe');
+            iframe.id = 'cspro-dialog-iframe';
+            iframe.style.cssText = 'width:100%;height:100%;border:none;';
+            iframe.src = dialogPath;
+            
+            // Handle iframe load errors
+            iframe.onerror = function(e) {
+                console.error('[WasmDialogBridge JS] iframe load error:', e);
+            };
+            
+            dialogContainer.appendChild(iframe);
+            overlay.appendChild(dialogContainer);
+            document.body.appendChild(overlay);
+            
+            // Store input data for the dialog to access
+            window.CSProDialogHandler._currentDialogInput = inputData;
+            window.CSProDialogHandler._currentDialogResolve = resolve;
+            
+            // Listen for dialog close messages
+            const messageHandler = function(event) {
+                if (event.data && event.data.type === 'cspro-dialog-close') {
+                    console.log("[WasmDialogBridge JS] Dialog closed with result:", event.data.result);
+                    window.removeEventListener('message', messageHandler);
+                    document.body.removeChild(overlay);
+                    window.CSProDialogHandler._currentDialogInput = null;
+                    window.CSProDialogHandler._currentDialogResolve = null;
+                    resolve(event.data.result);
+                } else if (event.data && event.data.type === 'cspro-dialog-ready') {
+                    // Dialog is ready, send input data
+                    console.log("[WasmDialogBridge JS] Dialog ready, sending input data");
+                    iframe.contentWindow.postMessage({
+                        type: 'cspro-dialog-input',
+                        input: inputData
+                    }, '*');
+                } else if (event.data && event.data.type === 'cspro-dialog-resize') {
+                    // Dialog wants to resize - update iframe dimensions
+                    console.log("[WasmDialogBridge JS] Dialog resize request:", event.data.width, "x", event.data.height);
+                    iframe.style.width = event.data.width + 'px';
+                    iframe.style.height = event.data.height + 'px';
+                    iframe.style.minWidth = event.data.width + 'px';
+                    iframe.style.minHeight = event.data.height + 'px';
+                }
+            };
+            window.addEventListener('message', messageHandler);
+            
+            // Handle ESC key to close dialog
+            const keyHandler = function(event) {
+                if (event.key === 'Escape') {
+                    window.removeEventListener('keydown', keyHandler);
+                    window.removeEventListener('message', messageHandler);
+                    document.body.removeChild(overlay);
+                    window.CSProDialogHandler._currentDialogInput = null;
+                    window.CSProDialogHandler._currentDialogResolve = null;
+                    resolve(null);
+                }
+            };
+            window.addEventListener('keydown', keyHandler);
+        });
+    };
+    
+    // showDialogAsync - called by jspi_showDialog in C++
+    // C++ expects 1-based indices in the result!
+    window.CSProDialogHandler.showDialogAsync = async function(dialogName, inputDataJson) {
+        console.log("[WasmDialogBridge JS] showDialogAsync:", dialogName);
+        try {
+            const data = inputDataJson ? JSON.parse(inputDataJson) : {};
+            
+            if (dialogName === 'errmsg') {
+                // Try to use native HTML dialog
+                const dialogPath = '/dialogs/errmsg.html';
+                try {
+                    const result = await window.CSProDialogHandler._showHtmlDialogInIframe(dialogPath, data);
+                    if (result && result.result && typeof result.result.index === 'number') {
+                        console.log("[WasmDialogBridge JS] HTML dialog returned index:", result.result.index);
+                        return JSON.stringify({ index: result.result.index });
+                    }
+                } catch (e) {
+                    console.warn("[WasmDialogBridge JS] HTML dialog failed, using fallback:", e);
+                }
+                
+                // Fallback to browser alert if HTML dialog fails
+                const message = data.message || data.title || "Error";
+                const title = data.title || "";
+                window.alert(title ? (title + "\n\n" + message) : message);
+                return JSON.stringify({ index: 1 }); // 1-based index!
+            }
+            
+            if (dialogName === 'choice' || dialogName === 'select') {
+                const dialogPath = '/dialogs/' + dialogName + '.html';
+                try {
+                    const result = await window.CSProDialogHandler._showHtmlDialogInIframe(dialogPath, data);
+                    if (result && result.result) {
+                        return JSON.stringify(result.result);
+                    }
+                } catch (e) {
+                    console.warn("[WasmDialogBridge JS] HTML dialog failed:", e);
+                }
+                return JSON.stringify({ index: 1 });
+            }
+            
+            // Default: try HTML dialog, fallback to alert
+            const dialogPath = '/dialogs/' + dialogName + '.html';
+            try {
+                const result = await window.CSProDialogHandler._showHtmlDialogInIframe(dialogPath, data);
+                if (result && result.result) {
+                    return JSON.stringify(result.result);
+                }
+            } catch (e) {
+                console.warn("[WasmDialogBridge JS] HTML dialog failed:", e);
+            }
+            
+            const message = data.message || data.title || "Dialog: " + dialogName;
+            window.alert(message);
+            return JSON.stringify({ index: 1 }); // 1-based index!
+        } catch (e) {
+            console.error("[WasmDialogBridge JS] showDialogAsync error:", e);
+            return JSON.stringify({ index: 1 }); // 1-based index!
+        }
+    };
+    
+    // showHtmlDialogAsync - for HTML-based dialogs
+    window.CSProDialogHandler.showHtmlDialogAsync = async function(dialogPath, inputDataJson, optionsJson) {
+        console.log("[WasmDialogBridge JS] showHtmlDialogAsync:", dialogPath);
+        try {
+            const inputData = inputDataJson ? JSON.parse(inputDataJson) : {};
+            const options = optionsJson ? JSON.parse(optionsJson) : {};
+            
+            const result = await window.CSProDialogHandler._showHtmlDialogInIframe(dialogPath, inputData);
+            if (result && result.result) {
+                return JSON.stringify(result.result);
+            }
+            return JSON.stringify({});
+        } catch (e) {
+            console.error("[WasmDialogBridge JS] showHtmlDialogAsync error:", e);
+            return null;
+        }
+    };
+    
+    // showModalDialogAsync - for modal message boxes
+    window.CSProDialogHandler.showModalDialogAsync = async function(title, message, mbType) {
+        console.log("[WasmDialogBridge JS] showModalDialogAsync:", title, mbType);
+        try {
+            // mbType determines button layout (OK, OK/Cancel, Yes/No, etc.)
+            // Use HTML dialog for better UI
+            let buttons = [{ caption: 'OK', index: 1 }];
+            if (mbType === 4 || mbType === 36) { // MB_YESNO
+                buttons = [{ caption: 'Yes', index: 1 }, { caption: 'No', index: 2 }];
+            } else if (mbType === 1 || mbType === 33) { // MB_OKCANCEL
+                buttons = [{ caption: 'OK', index: 1 }, { caption: 'Cancel', index: 2 }];
+            } else if (mbType === 3 || mbType === 35) { // MB_YESNOCANCEL
+                buttons = [{ caption: 'Yes', index: 1 }, { caption: 'No', index: 2 }, { caption: 'Cancel', index: 3 }];
+            }
+            
+            const inputData = { title: title, message: message, buttons: buttons };
+            
+            try {
+                const result = await window.CSProDialogHandler._showHtmlDialogInIframe('/dialogs/errmsg.html', inputData);
+                if (result && result.result && typeof result.result.index === 'number') {
+                    // Convert dialog index to Windows button ID
+                    const idx = result.result.index;
+                    if (mbType === 4 || mbType === 36) { // MB_YESNO
+                        return idx === 1 ? 6 : 7; // 6=IDYES, 7=IDNO
+                    } else if (mbType === 1 || mbType === 33) { // MB_OKCANCEL
+                        return idx === 1 ? 1 : 2; // 1=IDOK, 2=IDCANCEL
+                    } else if (mbType === 3 || mbType === 35) { // MB_YESNOCANCEL
+                        if (idx === 1) return 6; // IDYES
+                        if (idx === 2) return 7; // IDNO
+                        return 2; // IDCANCEL
+                    }
+                    return 1; // IDOK
+                }
+            } catch (e) {
+                console.warn("[WasmDialogBridge JS] HTML modal failed, using fallback:", e);
+            }
+            
+            // Fallback to browser dialogs
+            if (mbType === 4 || mbType === 36) { // MB_YESNO types
+                const result = window.confirm(title + "\n\n" + message);
+                return result ? 6 : 7; // 6=IDYES, 7=IDNO
+            } else if (mbType === 1 || mbType === 33) { // MB_OKCANCEL types
+                const result = window.confirm(title + "\n\n" + message);
+                return result ? 1 : 2; // 1=IDOK, 2=IDCANCEL
+            } else {
+                window.alert(title + "\n\n" + message);
+                return 1; // IDOK
+            }
+        } catch (e) {
+            console.error("[WasmDialogBridge JS] showModalDialogAsync error:", e);
+            return 1;
+        }
+    };
+    
+    console.log("[WasmDialogBridge JS] All dialog handlers registered with HTML dialog support");
+}
+
+setKotlinHandler
+handler
+C(handler) => { window.CSProDialogHandler.kotlinHandler = handler; }
+getKotlinHandler
+9() => { return window.CSProDialogHandler.kotlinHandler; }
+stringifyResult
+JsString
+result
+.(result) => { return JSON.stringify(result); }
+	parseJson
+json
+String
+&(json) => { return JSON.parse(json); }
+getProperty
+obj
+key
+"(obj, key) => { return obj[key]; }
+getStringProperty
+H(obj, key) => { return typeof obj[key] === 'string' ? obj[key] : null; }
+getNumberProperty
+H(obj, key) => { return typeof obj[key] === 'number' ? obj[key] : null; }
+createResultObject
+type
+data
+6(type, data) => { return { type: type, data: data }; }
+createIndexResult
+index
+Int
+'(index) => { return { index: index }; }
+createNoteResult
+note
+$(note) => { return { note: note }; }
+createTextInputResult
+text
+)(text) => { return { textInput: text }; }
+createValueResult
+value
+'(value) => { return { value: value }; }
+jsNull
+() => { return null; }
+gov
+census
+cspro
+engine
+dialogs
+WasmDialogBridge
+Any
+scope
+kotlinx
+
+coroutines
+CoroutineScope
+isRegistered
+Boolean
+pendingDialogResults
+collections
+
+MutableMap
+register
+handleShowDialog
+
+dialogName
+inputDataJson
+handleShowHtmlDialog
+
+dialogPath
+optionsJson
+handleShowModalDialog
+title
+message
+mbType
+handleGetInputData
+dialogId
+storeDialogResult
+
+unregisterŽ
+
+  
+  
+ 	
+
+ 
+ 
+  
+ ) 
+6
+7
+	8
+
+9
+:
+; 
+ < 
+>
+?
+@ 
+ B 
+ D
+E ­ 8 Hƒ Ò
+(à
++2(2(2(8 Hƒ Ò
+(à
+2(8 Hƒ Ò
+(à
+8Hƒ Ò
+(à
+2(8Hƒ Ò
+(à
+2(8Hƒ Ò
+(à
+%2(2(8Hƒ Ò
+(à
+%2(2(8Hƒ Ò
+( à
+%!2(2(8Hƒ Ò
+("à
+%#2$(2%(8Hƒ Ò
+(&à
+'2((8Hƒ Ò
+(*à
++2,(8Hƒ Ò
+(-à
+.2/(8Hƒ Ò
+(0à
+122(8Hƒ Ò
+(3à
+48Hƒ Ò
+(5à
+ò&
+0
+0
+0
+0
+0
+0
+0
+0Ø
+"êÆ BJF8à
+JG2H(2I(8H†@à
+JJ2K(2I(2L(8H†@à
+JM2N(2O(2P(8H†@à
+JQ2R(8à
+JS2R(2(8à
+JT8à
+R
+=HX‚€R
+AHX‚€R
+CHX‚€ò*
+0
+0
+0
+0
+0
+
+0
+0
+0ø
+à
+ ê
+gov.census.cspro.engine.dialogsò
+

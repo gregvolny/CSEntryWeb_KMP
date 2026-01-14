@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSEntry Log Viewer</title>
+    <style>
+        :root {
+            --cspro-green: #488840;
+            --bg: #1e1e1e;
+            --surface: #252526;
+            --text: #d4d4d4;
+            --border: #3c3c3c;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        h1 {
+            color: var(--cspro-green);
+            font-size: 20px;
+        }
+        .controls {
+            display: flex;
+            gap: 12px;
+            flex: 1;
+            align-items: center;
+        }
+        select, input, button {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            font-size: 14px;
+        }
+        button {
+            cursor: pointer;
+            background: var(--cspro-green);
+            border-color: var(--cspro-green);
+            color: white;
+        }
+        button:hover { opacity: 0.9; }
+        button.danger { background: #c0392b; border-color: #c0392b; }
+        .search {
+            flex: 1;
+            max-width: 300px;
+        }
+        .stats {
+            color: #888;
+            font-size: 13px;
+        }
+        .log-container {
+            background: var(--surface);
+            border-radius: 4px;
+            overflow: hidden;
+            max-height: calc(100vh - 150px);
+            overflow-y: auto;
+        }
+        .log-entry {
+            padding: 6px 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .log-entry:hover { background: rgba(255,255,255,0.05); }
+        .time { color: #6a9955; min-width: 90px; }
+        .level { min-width: 60px; font-weight: bold; }
+        .level-INFO { color: #569cd6; }
+        .level-DEBUG { color: #888; }
+        .level-WARN { color: #dcdcaa; }
+        .level-ERROR { color: #f14c4c; }
+        .message { flex: 1; word-break: break-word; }
+        .data { color: #ce9178; font-size: 12px; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .empty { padding: 40px; text-align: center; color: #888; }
+        .auto-refresh { display: flex; align-items: center; gap: 6px; }
+        .auto-refresh input[type="checkbox"] { width: 16px; height: 16px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📋 CSEntry Logs</h1>
+        <div class="controls">
+            <select id="levelFilter">
+                <option value="">All Levels</option>
+                <option value="DEBUG">DEBUG</option>
+                <option value="INFO">INFO</option>
+                <option value="WARN">WARN</option>
+                <option value="ERROR">ERROR</option>
+            </select>
+            <input type="text" id="search" class="search" placeholder="Search logs...">
+            <label class="auto-refresh">
+                <input type="checkbox" id="autoRefresh" checked>
+                Auto-refresh
+            </label>
+            <button onclick="refreshLogs()">🔄 Refresh</button>
+            <button class="danger" onclick="clearLogs()">🗑️ Clear</button>
+        </div>
+        <div class="stats" id="stats">Loading...</div>
+    </div>
+    <div class="log-container" id="logs">
+        <div class="empty">Loading logs...</div>
+    </div>
+
+    <script>
+        let allLogs = [];
+        let refreshInterval = null;
+
+        async function fetchLogs() {
+            try {
+                const resp = await fetch('/api/logs');
+                const data = await resp.json();
+                allLogs = data.logs || [];
+                document.getElementById('stats').textContent = `${allLogs.length} log entries`;
+                renderLogs();
+            } catch (err) {
+                document.getElementById('logs').innerHTML = '<div class="empty">Error loading logs: ' + err.message + '</div>';
+            }
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('logs');
+            const levelFilter = document.getElementById('levelFilter').value;
+            const searchText = document.getElementById('search').value.toLowerCase();
+            
+            let filtered = allLogs;
+            if (levelFilter) {
+                filtered = filtered.filter(log => log.level === levelFilter);
+            }
+            if (searchText) {
+                filtered = filtered.filter(log => 
+                    (log.message || '').toLowerCase().includes(searchText) ||
+                    JSON.stringify(log.data || '').toLowerCase().includes(searchText)
+                );
+            }
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="empty">No matching logs found</div>';
+                return;
+            }
+            
+            // Show most recent first
+            const reversed = [...filtered].reverse();
+            
+            container.innerHTML = reversed.map(log => {
+                const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '';
+                const level = log.level || 'INFO';
+                const message = log.message || log.raw || '';
+                const data = log.data ? JSON.stringify(log.data) : '';
+                
+                return `
+                    <div class="log-entry">
+                        <span class="time">${time}</span>
+                        <span class="level level-${level}">${level}</span>
+                        <span class="message">${escapeHtml(message)}</span>
+                        ${data ? `<span class="data" title="${escapeHtml(data)}">${escapeHtml(data)}</span>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function clearLogs() {
+            if (!confirm('Clear all logs?')) return;
+            await fetch('/api/logs', { method: 'DELETE' });
+            allLogs = [];
+            renderLogs();
+            document.getElementById('stats').textContent = '0 log entries';
+        }
+
+        function refreshLogs() {
+            fetchLogs();
+        }
+
+        // Event listeners
+        document.getElementById('levelFilter').addEventListener('change', renderLogs);
+        document.getElementById('search').addEventListener('input', renderLogs);
+        document.getElementById('autoRefresh').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                refreshInterval = setInterval(fetchLogs, 2000);
+            } else {
+                clearInterval(refreshInterval);
+            }
+        });
+
+        // Initial load
+        fetchLogs();
+        refreshInterval = setInterval(fetchLogs, 2000);
+    </script>
+</body>
+</html>

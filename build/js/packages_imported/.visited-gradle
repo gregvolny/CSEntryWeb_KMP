@@ -1,0 +1,31 @@
+{
+  "version": "9",
+  "items": {
+    "8027a4b5a16a6389dd3712d6b1030b4d": {
+      "src": "C:\\Users\\Admin\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlin\\kotlin-stdlib-wasm-js\\2.0.21\\ff426b6616aa0b435eef409b48c996b283209a36\\kotlin-stdlib-wasm-js-2.0.21.klib"
+    },
+    "61108da20006a4cceb8e0b4753db9320": {
+      "src": "C:\\Users\\Admin\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlinx\\kotlinx-coroutines-core-wasm-js\\1.8.0\\6fa5af0c703e4957c811aef817336eb6f6572e72\\kotlinx-coroutines-core-wasm-js-1.8.0.klib"
+    },
+    "1c6fc0b4d51e510c7517b56b13805943": {
+      "src": "C:\\Users\\Admin\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlinx\\atomicfu-wasm-js\\0.23.1\\f7046e9f5ce6014c3471098284bd654831bb1f41\\atomicfu-wasm-js-0.23.1.klib"
+    },
+    "fd929bc9ae1bdf4a718c8d55c0a627d4": {
+      "src": "C:\\Users\\Admin\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlinx\\kotlinx-serialization-json-wasm-js\\1.6.3\\e59617b814028a67ed273c9bf753979da08f2fd5\\kotlinx-serialization-json-wasm-js-1.6.3.klib"
+    },
+    "c9a128ee101287cebe57035c8162a868": {
+      "src": "C:\\Users\\Admin\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlinx\\kotlinx-serialization-core-wasm-js\\1.6.3\\3adaf6fc8910715fe3a9fe5f5ecddcf69c50868d\\kotlinx-serialization-core-wasm-js-1.6.3.klib"
+    },
+    "7ecf9d88842e7ca74b2a67c72f3c5b60": {
+      "src": "C:\\Users\\Admin\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlinx\\kotlinx-datetime-wasm-js\\0.5.0\\629555641f7616da6dd028fae163a288a0e28264\\kotlinx-datetime-wasm-js-0.5.0.klib",
+      "target": "Kotlin-DateTime-library-kotlinx-datetime-wasm-js\\0.5.0"
+    },
+    "1a4a8608e01cc6c44a8644d0817147a5": {
+      "src": "C:\\Users\\Admin\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlinx\\kotlinx-browser-wasm-js\\0.3\\6d30568d93440fe70668ed80aef06dfdc82e5062\\kotlinx-browser-wasm-js-0.3.klib"
+    },
+    "fffad12d968e557f4c38a7f8f56b463e": {
+      "src": "C:\\Users\\Admin\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlin\\kotlin-test-js-runner\\2.0.21\\99e060b94579ec8542bc53e141b0d7ed9a48ad5d\\kotlin-test-js-runner-2.0.21.jar",
+      "target": "kotlin-test-js-runner\\0.0.2"
+    }
+  }
+}

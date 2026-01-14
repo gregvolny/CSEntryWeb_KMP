@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5a9a52;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3d7838;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#grad)"/>
+  
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="220" fill="none" stroke="#ffffff" stroke-width="8" opacity="0.3"/>
+  
+  <!-- CS text -->
+  <text x="256" y="200" font-family="Arial, sans-serif" font-size="120" font-weight="bold" fill="#ffffff" text-anchor="middle">CS</text>
+  
+  <!-- Entry text -->
+  <text x="256" y="320" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="#ffffff" text-anchor="middle">Entry</text>
+  
+  <!-- Decorative line -->
+  <rect x="130" y="225" width="252" height="4" fill="#ffffff" opacity="0.5" rx="2"/>
+  
+  <!-- Small document icon -->
+  <g transform="translate(380, 380) scale(0.6)">
+    <rect x="0" y="0" width="80" height="100" rx="8" fill="#ffffff"/>
+    <rect x="12" y="20" width="56" height="8" fill="#488840" rx="2"/>
+    <rect x="12" y="36" width="40" height="6" fill="#488840" rx="2"/>
+    <rect x="12" y="50" width="50" height="6" fill="#488840" rx="2"/>
+    <rect x="12" y="64" width="35" height="6" fill="#488840" rx="2"/>
+  </g>
+</svg>
