@@ -5,6 +5,7 @@ import gov.census.cspro.data.EntryPage
 import gov.census.cspro.engine.CSProEngineService
 import gov.census.cspro.engine.EngineEventListener
 import gov.census.cspro.engine.dialogs.CSProDialogManager
+import gov.census.cspro.engine.events.WasmEventBridge
 // DialogHelper is in the same package
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -887,7 +888,32 @@ class EntryActivity : BaseActivity(), EngineEventListener {
             
             onDestroy()
             container?.innerHTML = ""
-            ActivityRouter.goBack()
+            
+            // Check if there's a pending PFF to launch (from execPff/execsystem call)
+            val pendingPff = WasmEventBridge.getPendingPff()
+            if (pendingPff != null) {
+                println("[EntryActivity] Launching pending PFF: $pendingPff")
+                
+                // Convert WASM path back to OPFS path for the application
+                // The path comes from C++ as /opfs/DeployPSC/Menu/Menu.pff
+                // We need to convert it to applications/DeployPSC/Menu/Menu.pff
+                val opfsPath = if (pendingPff.startsWith("/opfs/")) {
+                    "applications/" + pendingPff.removePrefix("/opfs/")
+                } else {
+                    pendingPff
+                }
+                
+                println("[EntryActivity] Converted to OPFS path: $opfsPath")
+                
+                // Launch the new PFF in EntryActivity
+                ActivityRouter.navigateTo("EntryActivity", mapOf(
+                    "filename" to opfsPath,
+                    "startMode" to "Add"
+                ))
+            } else {
+                // Normal case: go back to previous activity (CaseListActivity)
+                ActivityRouter.goBack()
+            }
         }
     }
 }

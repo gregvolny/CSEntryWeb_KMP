@@ -1,5 +1,6 @@
 package gov.census.cspro.engine.events
 
+import gov.census.cspro.ui.ActivityRouter
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.MainScope
@@ -19,6 +20,72 @@ private external fun initEventHandler()
 private external fun setOverflow(style: JsAny, value: String)
 
 /**
+ * Register the execPffAsync handler that stores the pending PFF and signals success
+ */
+@JsFun("""
+() => {
+    window.CSProEventHandler = window.CSProEventHandler || {};
+    window.CSProEventHandler._pendingPffPath = null;
+    
+    // execPffAsync - called by jspi_execPff in C++ 
+    // Stores the PFF path for the Kotlin layer to pick up after the current app stops
+    window.CSProEventHandler.execPffAsync = async function(pffPath) {
+        console.log("[WasmEventBridge JS] execPffAsync called:", pffPath);
+        
+        // Store the pending PFF path for the activity to pick up when it finishes
+        window.CSProEventHandler._pendingPffPath = pffPath;
+        
+        // Return true to indicate we've accepted the execPff request
+        // The actual navigation happens after the current activity finishes
+        return true;
+    };
+    
+    // Helper to get and clear the pending PFF path
+    window.CSProEventHandler.getPendingPff = function() {
+        const path = window.CSProEventHandler._pendingPffPath;
+        window.CSProEventHandler._pendingPffPath = null;
+        return path;
+    };
+    
+    // Check if there's a pending PFF
+    window.CSProEventHandler.hasPendingPff = function() {
+        return window.CSProEventHandler._pendingPffPath !== null;
+    };
+    
+    console.log("[WasmEventBridge JS] execPffAsync handler registered");
+}
+""")
+private external fun registerExecPffHandler()
+
+/**
+ * Get the pending PFF path from JavaScript (returns null if none)
+ */
+@JsFun("""
+() => {
+    if (typeof window.CSProEventHandler !== 'undefined' && 
+        typeof window.CSProEventHandler.getPendingPff === 'function') {
+        return window.CSProEventHandler.getPendingPff();
+    }
+    return null;
+}
+""")
+private external fun jsGetPendingPff(): String?
+
+/**
+ * Check if there's a pending PFF to launch
+ */
+@JsFun("""
+() => {
+    if (typeof window.CSProEventHandler !== 'undefined' && 
+        typeof window.CSProEventHandler.hasPendingPff === 'function') {
+        return window.CSProEventHandler.hasPendingPff();
+    }
+    return false;
+}
+""")
+private external fun jsHasPendingPff(): Boolean
+
+/**
  * Bridge between C++ WASM Engine and Kotlin for non-dialog events
  * 
  * The C++ WASM engine (csentryKMP) calls JavaScript functions via:
@@ -26,6 +93,7 @@ private external fun setOverflow(style: JsAny, value: String)
  * - window.CSProEventHandler.hideProgress()
  * - window.CSProEventHandler.updateProgress(percent, message) -> boolean
  * - window.CSProEventHandler.refreshPage(contents)
+ * - window.CSProEventHandler.execPffAsync(pffPath) -> boolean (async)
  * 
  * This bridge routes those calls to the Kotlin UI system.
  */
@@ -65,8 +133,30 @@ object WasmEventBridge {
         // Initialize the handler object
         initEventHandler()
         
+        // Register the execPff handler
+        registerExecPffHandler()
+        
         isRegistered = true
         println("[WasmEventBridge] Event handler registered successfully")
+    }
+    
+    /**
+     * Check if there's a pending PFF to launch
+     */
+    fun hasPendingPff(): Boolean {
+        return jsHasPendingPff()
+    }
+    
+    /**
+     * Get and clear the pending PFF path
+     * Returns null if no pending PFF
+     */
+    fun getPendingPff(): String? {
+        val path = jsGetPendingPff()
+        if (path != null) {
+            println("[WasmEventBridge] Got pending PFF: $path")
+        }
+        return path
     }
     
     /**

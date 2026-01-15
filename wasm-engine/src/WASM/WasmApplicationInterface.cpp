@@ -480,6 +480,34 @@ EM_ASYNC_JS(int, jspi_viewFile, (const char* content, int contentType, const cha
     }
 });
 
+// ============================================================================
+// ExecPff - Execute/launch another PFF file
+// ============================================================================
+EM_ASYNC_JS(int, jspi_execPff, (const char* pffPath), {
+    console.log("[JSPI] execPff called:", UTF8ToString(pffPath));
+    
+    try {
+        const path = UTF8ToString(pffPath);
+        
+        // Check if the event handler is registered
+        if (typeof window.CSProEventHandler === 'undefined' || 
+            typeof window.CSProEventHandler.execPffAsync !== 'function') {
+            console.error("[JSPI] CSProEventHandler.execPffAsync not registered");
+            console.error("[JSPI] Ensure WasmEventBridge.register() is called and execPff handler is set up");
+            return 0;
+        }
+        
+        // Call the registered execPff handler
+        // This should navigate to a new EntryActivity with the specified PFF
+        const result = await window.CSProEventHandler.execPffAsync(path);
+        console.log("[JSPI] execPff result:", result);
+        return result ? 1 : 0;
+    } catch (e) {
+        console.error("[JSPI] execPff error:", e);
+        return 0;
+    }
+});
+
 #endif // __EMSCRIPTEN__
 
 WasmApplicationInterface::WasmApplicationInterface()
@@ -908,8 +936,21 @@ bool WasmApplicationInterface::ExecSystem(const std::wstring& command, bool wait
 
 bool WasmApplicationInterface::ExecPff(const std::wstring& pff_filename)
 {
-    printf("[WasmApplicationInterface] ExecPff - not available in browser\n");
+    printf("[WasmApplicationInterface] ExecPff: %ls\n", pff_filename.c_str());
+    
+#ifdef __EMSCRIPTEN__
+    // Convert the path to UTF-8 for JavaScript
+    std::string pff_path_utf8 = UTF8Convert::WideToUTF8(pff_filename);
+    
+    // Call the JSPI async function to execute the PFF
+    // This will trigger WasmEventBridge to navigate to EntryActivity with the new PFF
+    int result = jspi_execPff(pff_path_utf8.c_str());
+    printf("[WasmApplicationInterface] ExecPff result: %d\n", result);
+    return result != 0;
+#else
+    printf("[WasmApplicationInterface] ExecPff - not available outside WASM\n");
     return false;
+#endif
 }
 
 CString WasmApplicationInterface::GetProperty(const CString& parameter)

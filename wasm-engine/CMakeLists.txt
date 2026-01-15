@@ -1095,7 +1095,7 @@ target_link_options(${PROJECT_NAME} PUBLIC -sENVIRONMENT=web,node)
 target_link_options(${PROJECT_NAME} PUBLIC -sASYNCIFY=1)
 target_link_options(${PROJECT_NAME} PUBLIC -sASYNCIFY_STACK_SIZE=65536)
 # List functions that may call async JS (enables stack unwinding)
-target_link_options(${PROJECT_NAME} PUBLIC "-sASYNCIFY_IMPORTS=['jspi_showDialog','jspi_showHtmlDialog','jspi_showModalDialog','jspi_getInputData','emscripten_sleep']")
+target_link_options(${PROJECT_NAME} PUBLIC "-sASYNCIFY_IMPORTS=['jspi_showDialog','jspi_showHtmlDialog','jspi_showModalDialog','jspi_getInputData','jspi_execPff','emscripten_sleep']")
 
 # Export filesystem API
 target_link_options(${PROJECT_NAME} PUBLIC -sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap','UTF8ToString','stringToUTF8'])
