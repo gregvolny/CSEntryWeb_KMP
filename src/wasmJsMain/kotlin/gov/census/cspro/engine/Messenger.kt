@@ -22,6 +22,7 @@ package gov.census.cspro.engine
 import kotlinx.browser.window
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -170,8 +171,17 @@ object Messenger {
             } catch (e: CancellationException) {
                 println("[Messenger] Message loop cancelled")
                 break
+            } catch (e: ClosedReceiveChannelException) {
+                // Channel was closed - this is expected when stop() is called
+                println("[Messenger] Channel closed, stopping message loop")
+                break
             } catch (e: Exception) {
                 println("[Messenger] Error in message loop: $e")
+                // Check if we should continue
+                if (!isRunning || messageChannel.isClosedForReceive) {
+                    println("[Messenger] Stopping due to closed state")
+                    break
+                }
             }
         }
         

@@ -6745,6 +6745,146 @@ export async function instantiate(imports={}, runInitializer=true) {
                 });
             };
         
+            // viewFileAsync - view a file (HTML, text, etc.) in an overlay
+            // contentType: 0 = Filename, 1 = HtmlUrl  
+            // Returns true on success, false on failure
+            window.CSProDialogHandler.viewFileAsync = async function(content, contentType, title, accessToken) {
+                console.log("[WasmDialogBridge JS] viewFileAsync:", content, "type:", contentType, "title:", title);
+        
+                try {
+                    // Create overlay container
+                    const overlay = document.createElement('div');
+                    overlay.id = 'cspro-view-overlay';
+                    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+            
+                    // Create viewer container
+                    const viewContainer = document.createElement('div');
+                    viewContainer.id = 'cspro-view-container';
+                    viewContainer.style.cssText = 'background:white;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);width:90vw;height:90vh;display:flex;flex-direction:column;overflow:hidden;';
+            
+                    // Create header with title and close button
+                    const header = document.createElement('div');
+                    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#f5f5f5;border-bottom:1px solid #ddd;flex-shrink:0;';
+            
+                    const titleEl = document.createElement('span');
+                    titleEl.style.cssText = 'font-weight:600;font-size:16px;color:#333;';
+                    titleEl.textContent = title || 'View';
+            
+                    const closeBtn = document.createElement('button');
+                    closeBtn.style.cssText = 'background:none;border:none;font-size:24px;cursor:pointer;color:#666;padding:4px 8px;';
+                    closeBtn.innerHTML = '&times;';
+                    closeBtn.title = 'Close (ESC)';
+            
+                    header.appendChild(titleEl);
+                    header.appendChild(closeBtn);
+                    viewContainer.appendChild(header);
+            
+                    // Create content area (iframe for HTML, pre for text)
+                    let contentEl;
+                    let isHtml = contentType === 1 || content.toLowerCase().endsWith('.html') || content.toLowerCase().endsWith('.htm');
+            
+                    if (isHtml) {
+                        // For HTML content, use iframe
+                        contentEl = document.createElement('iframe');
+                        contentEl.style.cssText = 'flex:1;width:100%;border:none;';
+                        // Note: Using allow-scripts without allow-same-origin for security
+                        // (prevents script from removing sandbox). allow-forms for form submission.
+                        contentEl.sandbox = 'allow-scripts allow-forms';
+                
+                        // Determine the URL to load
+                        let url = content;
+                        if (contentType === 0) {
+                            // It's a filename - convert to URL
+                            // Files in WASM FS are at /opfs/ prefix
+                            if (content.startsWith('/opfs/') || content.startsWith('/')) {
+                                // Try to read the file content via the WASM module
+                                try {
+                                    // Use window.CSProModule which is set by csentryKMP-loader.js
+                                    const wasmModule = window.CSProModule || window.csentryKMPModule?.module;
+                                    if (wasmModule && wasmModule.FS) {
+                                        console.log("[WasmDialogBridge JS] Reading HTML file from WASM FS:", content);
+                                        const fileContent = wasmModule.FS.readFile(content, { encoding: 'utf8' });
+                                        console.log("[WasmDialogBridge JS] File content length:", fileContent.length);
+                                        // Create a blob URL
+                                        const blob = new Blob([fileContent], { type: 'text/html' });
+                                        url = URL.createObjectURL(blob);
+                                    } else {
+                                        console.warn("[WasmDialogBridge JS] Cannot read WASM FS file - module not found:", content);
+                                        url = content;
+                                    }
+                                } catch (e) {
+                                    console.error("[WasmDialogBridge JS] Error reading HTML file:", e);
+                                    url = content;
+                                }
+                            } else {
+                                url = content;
+                            }
+                        }
+                
+                        contentEl.src = url;
+                    } else {
+                        // For text files, read content and display in pre
+                        const scrollContainer = document.createElement('div');
+                        scrollContainer.style.cssText = 'flex:1;overflow:auto;padding:16px;';
+                
+                        contentEl = document.createElement('pre');
+                        contentEl.style.cssText = 'margin:0;white-space:pre-wrap;word-wrap:break-word;font-family:monospace;font-size:14px;';
+                
+                        // Try to read the file
+                        try {
+                            // Use window.CSProModule which is set by csentryKMP-loader.js
+                            const wasmModule = window.CSProModule || window.csentryKMPModule?.module;
+                            if (wasmModule && wasmModule.FS) {
+                                console.log("[WasmDialogBridge JS] Reading text file from WASM FS:", content);
+                                const fileContent = wasmModule.FS.readFile(content, { encoding: 'utf8' });
+                                console.log("[WasmDialogBridge JS] File content length:", fileContent.length);
+                                contentEl.textContent = fileContent;
+                            } else {
+                                console.error("[WasmDialogBridge JS] Cannot read WASM FS file - module not found");
+                                contentEl.textContent = 'Unable to read file: ' + content + '\n\nWASM module not available.';
+                            }
+                        } catch (e) {
+                            console.error("[WasmDialogBridge JS] Error reading text file:", e);
+                            contentEl.textContent = 'Error reading file: ' + e.message;
+                        }
+                
+                        scrollContainer.appendChild(contentEl);
+                        contentEl = scrollContainer;
+                    }
+            
+                    viewContainer.appendChild(contentEl);
+                    overlay.appendChild(viewContainer);
+                    document.body.appendChild(overlay);
+            
+                    // Return a promise that resolves when closed
+                    return new Promise((resolve) => {
+                        const closeViewer = () => {
+                            document.body.removeChild(overlay);
+                            resolve(true);
+                        };
+                
+                        closeBtn.onclick = closeViewer;
+                
+                        // Also close on click outside
+                        overlay.onclick = (e) => {
+                            if (e.target === overlay) closeViewer();
+                        };
+                
+                        // Handle ESC key
+                        const keyHandler = (e) => {
+                            if (e.key === 'Escape') {
+                                window.removeEventListener('keydown', keyHandler);
+                                closeViewer();
+                            }
+                        };
+                        window.addEventListener('keydown', keyHandler);
+                    });
+                } catch (e) {
+                    console.error("[WasmDialogBridge JS] viewFileAsync error:", e);
+                    return false;
+                }
+            };
+        
             // showDialogAsync - called by jspi_showDialog in C++
             // C++ expects 1-based indices in the result!
             window.CSProDialogHandler.showDialogAsync = async function(dialogName, inputDataJson) {
@@ -7953,6 +8093,7 @@ export async function instantiate(imports={}, runInitializer=true) {
         'gov.census.cspro.ui.jsGetFileList' : (input) => input.files,
         'gov.census.cspro.ui.jsGetFileWebkitRelativePath' : (file) => file.webkitRelativePath || file.name,
         'gov.census.cspro.ui.jsReadFileAsArrayBuffer' : (file) => file.arrayBuffer(),
+        'gov.census.cspro.ui.jsGetArrayBufferByteLength' : (ab) => ab ? ab.byteLength : 0,
         'gov.census.cspro.ui.jsDateNow' : () => Date.now(),
         'gov.census.cspro.ui.jsFileListItem' : (files, i) => files.item(i),
         'gov.census.cspro.ui.jsFileListLength' : (files) => files ? files.length : 0,
@@ -7966,6 +8107,21 @@ export async function instantiate(imports={}, runInitializer=true) {
         'gov.census.cspro.ui.jsFileListLength_1' : (files) => files ? files.length : 0,
         'gov.census.cspro.ui.jsGetFileName_1' : (file) => file.name,
         'gov.census.cspro.ui.jsGetRelativePath' : (file) => file.webkitRelativePath || file.name,
+        'gov.census.cspro.ui.jsShowDirectoryPicker' : () => window.showDirectoryPicker(),
+        'gov.census.cspro.ui.jsGetHandleName' : (handle) => handle.name,
+        'gov.census.cspro.ui.jsGetHandleValues' : (handle) => handle.values(),
+        'gov.census.cspro.ui.jsAsyncIteratorToArray' : (iterator) => {
+            return (async function() {
+                const arr = [];
+                for await (const entry of iterator) {
+                    arr.push(entry);
+                }
+                return arr;
+            })();
+        },
+        'gov.census.cspro.ui.jsIsFileHandle' : (entry) => entry.kind === 'file',
+        'gov.census.cspro.ui.jsIsDirectoryHandle' : (entry) => entry.kind === 'directory',
+        'gov.census.cspro.ui.jsGetFileFromHandle' : (fileHandle) => fileHandle.getFile(),
         'gov.census.cspro.ui.jsReadArrayBuffer' : (file) => file.arrayBuffer(),
         'gov.census.cspro.ui.jsArrayBufferToUint8Array' : (buffer) => new Uint8Array(buffer),
         'gov.census.cspro.ui.jsUint8ArrayGet' : (arr, i) => arr[i],

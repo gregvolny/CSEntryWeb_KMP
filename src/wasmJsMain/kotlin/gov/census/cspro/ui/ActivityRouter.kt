@@ -93,12 +93,16 @@ object ActivityRouter {
     }
     
     private fun showActivity(activityClass: String, activityExtras: Map<String, Any>?, addToStack: Boolean = true) {
+        println("[ActivityRouter] showActivity: $activityClass with extras: $activityExtras")
+        
         // Destroy current activity
         currentActivity?.onPause()
         currentActivity?.onDestroy()
         
         // Create new activity
+        println("[ActivityRouter] Creating activity...")
         val activity = createActivity(activityClass)
+        println("[ActivityRouter] Activity created: ${activity != null}")
         
         if (activity != null) {
             currentActivity = activity
@@ -108,9 +112,13 @@ object ActivityRouter {
             }
             
             // Lifecycle methods
+            println("[ActivityRouter] Calling onCreate...")
             activity.onCreate()
+            println("[ActivityRouter] Calling onStart...")
             activity.onStart()
+            println("[ActivityRouter] Calling onResume...")
             activity.onResume()
+            println("[ActivityRouter] Activity $activityClass fully started")
         } else {
             println("[ActivityRouter] Unknown activity: $activityClass")
             // Fallback to applications list
@@ -122,6 +130,7 @@ object ActivityRouter {
     
     private fun createActivity(activityClass: String): BaseActivity? {
         val activityExtras = extras[activityClass]
+        println("[ActivityRouter] createActivity: $activityClass, extras: $activityExtras")
         
         return when (activityClass) {
             "ApplicationsListActivity" -> ApplicationsListActivity()
@@ -129,6 +138,7 @@ object ActivityRouter {
             "CaseListActivity" -> {
                 // CaseListActivity requires a filename extra
                 val filename = activityExtras?.get("filename") as? String
+                println("[ActivityRouter] CaseListActivity filename: $filename")
                 if (filename.isNullOrEmpty()) {
                     println("[ActivityRouter] CaseListActivity requires filename - redirecting to ApplicationsListActivity")
                     // Clear the bad state and redirect
@@ -137,6 +147,7 @@ object ActivityRouter {
                 }
                 val activity = CaseListActivity()
                 activity.setExtras(activityExtras)
+                println("[ActivityRouter] CaseListActivity created with extras set")
                 activity
             }
             "EntryActivity" -> {
@@ -152,6 +163,7 @@ object ActivityRouter {
                 activity.setExtras(activityExtras)
                 activity
             }
+            "SettingsActivity" -> SettingsActivity()
             // Add more activities as needed
             else -> null
         }

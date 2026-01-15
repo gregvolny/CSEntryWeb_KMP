@@ -327,29 +327,15 @@ static Serializer& serialize_optional_enum_vector(Serializer& ar, std::vector<st
 template<typename T>
 static Serializer& serialize(Serializer& ar, std::vector<T*>& vector_of_pointers)
 {
-#ifdef __EMSCRIPTEN__
-    printf("[Serializer] Deserializing vector of pointers...\n");
-    fflush(stdout);
-#endif
+    // Note: Verbose serializer logging removed for production performance
+    // Original had printf statements for each object deserialization
     return vector_serialize(ar, vector_of_pointers,
         [&](T*& value_pointer)
         {
-#ifdef __EMSCRIPTEN__
-            printf("[Serializer] Creating new object for pointer...\n");
-            fflush(stdout);
-#endif
             if( ar.IsLoading() )
                 value_pointer = new T;
 
-#ifdef __EMSCRIPTEN__
-            printf("[Serializer] Deserializing object...\n");
-            fflush(stdout);
-#endif
             ar & *value_pointer;
-#ifdef __EMSCRIPTEN__
-            printf("[Serializer] Object deserialized OK\n");
-            fflush(stdout);
-#endif
         });
 }
 

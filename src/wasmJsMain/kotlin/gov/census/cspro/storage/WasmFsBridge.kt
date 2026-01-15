@@ -18,6 +18,27 @@ import kotlin.coroutines.resumeWithException
 object WasmFsBridge {
     
     private const val WASM_OPFS_ROOT = "/opfs"
+    
+    // Track which application folders have already been copied to avoid duplicate copies
+    private val copiedApplications = mutableSetOf<String>()
+    
+    /**
+     * Clear the cache of copied application folders.
+     * Call this when an application is fully closed/ended to allow re-copying if needed.
+     */
+    fun clearCopiedApplicationCache() {
+        jsLogInfo("Clearing copied applications cache (was ${copiedApplications.size} entries)")
+        copiedApplications.clear()
+    }
+    
+    /**
+     * Clear cache entry for a specific application folder
+     */
+    fun clearCopiedApplicationCache(appFolder: String) {
+        if (copiedApplications.remove(appFolder)) {
+            jsLogInfo("Cleared cache for: $appFolder")
+        }
+    }
 
     /**
      * Convert a WASM FS path under /opfs back to an OPFS path under applications/.
@@ -101,6 +122,10 @@ object WasmFsBridge {
     /**
      * Copy an entire application folder from OPFS to WASM FS
      * This includes the PFF file and all related files (PEN, DCF, CSDB, etc.)
+     * Also copies parent folder files which may contain additional resources.
+     * 
+     * Caches which applications have been copied to avoid duplicate copies within
+     * the same session (e.g., when CaseListActivity opens app, then EntryActivity uses it).
      */
     suspend fun copyApplicationToWasmFs(pffPath: String): String? {
         if (isEmbeddedAsset(pffPath)) {
@@ -109,42 +134,74 @@ object WasmFsBridge {
         }
         
         try {
+            // Determine the application root folder early to check cache
+            val pathParts = pffPath.removePrefix("applications/").split("/")
+            val appRootFolder = if (pathParts.isNotEmpty()) {
+                "applications/${pathParts[0]}"
+            } else {
+                pffPath.substringBeforeLast("/")
+            }
+            
+            // Check if already copied to WASM FS (avoid duplicate copies)
+            if (appRootFolder in copiedApplications) {
+                jsLogInfo("Application folder already copied to WASM FS: $appRootFolder")
+                val wasmPath = getWasmPath(pffPath)
+                jsLogInfo("Returning cached WASM path for PFF: $wasmPath")
+                return wasmPath
+            }
+            
             jsLogInfo("Copying application folder to WASM FS for: $pffPath")
             
             // Determine the folder containing the PFF file
-            val folderPath = if (pffPath.contains("/")) {
+            val pffFolder = if (pffPath.contains("/")) {
                 pffPath.substringBeforeLast("/")
             } else {
                 ""
             }
             
-            if (folderPath.isEmpty()) {
+            if (pffFolder.isEmpty()) {
                 jsLogError("Invalid PFF path: $pffPath")
                 return null
             }
             
-            // List all files in the folder
-            val files = OpfsService.listFiles(folderPath)
-            jsLogInfo("Found ${files.size} files in folder: $folderPath")
+            jsLogInfo("PFF folder: $pffFolder")
+            jsLogInfo("Application root folder: $appRootFolder")
+            
+            // Recursively list ALL files in the application folder
+            val allFiles = OpfsService.listAllFiles(appRootFolder)
+            jsLogInfo("Found ${allFiles.size} total files in application folder")
             
             // Copy each file
             var successCount = 0
-            for (file in files) {
+            var failCount = 0
+            for (file in allFiles) {
                 if (!file.isDirectory) {
                     val filePath = file.path
+                    jsLogInfo("Copying: $filePath")
                     val copied = copyFileToWasmFs(filePath)
                     if (copied) {
                         successCount++
                     } else {
+                        failCount++
                         jsLogError("Failed to copy: $filePath")
                     }
                 }
             }
             
-            jsLogInfo("Copied $successCount/${files.size} files to WASM FS")
+            jsLogInfo("Copied $successCount files to WASM FS ($failCount failed)")
+            
+            if (successCount == 0 && allFiles.isNotEmpty()) {
+                jsLogError("No files were successfully copied!")
+                return null
+            }
+            
+            // Mark this application folder as copied to avoid duplicate copies
+            copiedApplications.add(appRootFolder)
             
             // Return the WASM FS path for the PFF file
-            return getWasmPath(pffPath)
+            val wasmPath = getWasmPath(pffPath)
+            jsLogInfo("Returning WASM path for PFF: $wasmPath")
+            return wasmPath
         } catch (e: Exception) {
             jsLogError("Error copying application to WASM FS: ${e.message}")
             return null

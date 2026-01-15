@@ -8,7 +8,7 @@ import gov.census.cspro.util.Util
  * 
  * Uses expect/actual pattern for native PFF parsing
  */
-class CNPifFile(filename: String) {
+class CNPifFile private constructor() {
     
     enum class ShowInApplicationListing {
         Always,
@@ -49,11 +49,6 @@ class CNPifFile(filename: String) {
     var pffDirectory: String = ""
         private set
     
-    init {
-        // Platform-specific initialization
-        loadPifData(filename)
-    }
-    
     fun shouldShowInApplicationListing(showHiddenApplications: Boolean): Boolean {
         // if the description is empty then we won't display it in the Applications Listing screen
         return description.trim().isNotEmpty() && (
@@ -62,10 +57,7 @@ class CNPifFile(filename: String) {
         )
     }
     
-    // Platform-specific PFF loading - will be implemented in wasmJsMain
-    private fun loadPifData(filename: String) {
-        val data = CNPifFileLoader.load(filename)
-        
+    private fun setFromData(filename: String, data: CNPifFileData) {
         isValid = data.isValid
         if (isValid) {
             pffDirectory = Util.removeFilename(filename)
@@ -78,6 +70,28 @@ class CNPifFile(filename: String) {
             userFilenames = data.userFilenames
             writeFilename = data.writeFilename
             onExitFilename = data.onExitFilename
+        }
+    }
+    
+    companion object {
+        /**
+         * Synchronous loader - for use when PFF content is already cached
+         */
+        fun load(filename: String): CNPifFile {
+            val pif = CNPifFile()
+            val data = CNPifFileLoader.load(filename)
+            pif.setFromData(filename, data)
+            return pif
+        }
+        
+        /**
+         * Asynchronous loader - for loading from OPFS
+         */
+        suspend fun loadAsync(filename: String): CNPifFile {
+            val pif = CNPifFile()
+            val data = CNPifFileLoader.loadAsync(filename)
+            pif.setFromData(filename, data)
+            return pif
         }
     }
 }
@@ -103,4 +117,5 @@ data class CNPifFileData(
  */
 expect object CNPifFileLoader {
     fun load(filename: String): CNPifFileData
+    suspend fun loadAsync(filename: String): CNPifFileData
 }

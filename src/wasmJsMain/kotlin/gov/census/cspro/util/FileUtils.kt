@@ -91,7 +91,7 @@ object ApplicationLoader {
         
         for (pffFile in pffFiles) {
             try {
-                val pifFile = CNPifFile(pffFile)
+                val pifFile = CNPifFile.loadAsync(pffFile)
                 
                 if (pifFile.isValid && pifFile.shouldShowInApplicationListing(false)) {
                     applications.add(

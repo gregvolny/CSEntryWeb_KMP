@@ -15,6 +15,7 @@
 #include <zToolsO/CommonObjectTransporter.h>
 #include <zToolsO/Utf8Convert.h>
 #include <zUtilO/TemporaryFile.h>
+#include <zUtilO/Viewers.h>
 #include <zEngineF/EngineUINodes.h>
 #include <zHtml/NavigationAddress.h>
 #include <zHtml/CSHtmlDlgRunner.h>
@@ -441,6 +442,41 @@ EM_ASYNC_JS(char*, jspi_editNote, (const char* note, const char* title, int case
         const buf = _malloc(len);
         stringToUTF8(noteStr, buf, len);
         return buf;
+    }
+});
+
+// ViewFile - displays a file (HTML, text, etc.) in a viewer
+// contentType: 0 = Filename, 1 = HtmlUrl
+// Returns 1 on success, 0 on failure
+EM_ASYNC_JS(int, jspi_viewFile, (const char* content, int contentType, const char* title, const char* accessToken), {
+    console.log("[JSPI] viewFile called:", UTF8ToString(content), "type:", contentType);
+    
+    try {
+        const contentStr = UTF8ToString(content);
+        const titleStr = UTF8ToString(title);
+        const accessTokenStr = UTF8ToString(accessToken);
+        
+        // Check if we have a view handler
+        if (typeof window.CSProDialogHandler === 'undefined' || 
+            typeof window.CSProDialogHandler.viewFileAsync !== 'function') {
+            console.error("[JSPI] CSProDialogHandler.viewFileAsync not registered");
+            
+            // Fallback: Try to open in a new window for HTML URLs
+            if (contentType === 1) {
+                // It's an HTML URL - open in new window
+                window.open(contentStr, '_blank');
+                return 1;
+            }
+            
+            return 0;
+        }
+        
+        // Call the registered view handler
+        const result = await window.CSProDialogHandler.viewFileAsync(contentStr, contentType, titleStr, accessTokenStr);
+        return result ? 1 : 0;
+    } catch (e) {
+        console.error("[JSPI] viewFile error:", e);
+        return 0;
     }
 });
 
@@ -1158,7 +1194,33 @@ bool WasmApplicationInterface::RunPffExecutor(EngineUI::RunPffExecutorNode& run_
 
 long WasmApplicationInterface::View(const Viewer& viewer)
 {
-    printf("[WasmApplicationInterface] View\n");
+    const auto& data = viewer.GetData();
+    const auto& options = viewer.GetOptions();
+    
+    printf("[WasmApplicationInterface] View: content=%ls, type=%d\n", 
+           data.content.c_str(), static_cast<int>(data.content_type));
+    
+#ifdef __EMSCRIPTEN__
+    // Get the content (file path or URL)
+    std::string content_utf8 = UTF8Convert::WideToUTF8(data.content);
+    
+    // Get the title if available
+    std::string title_utf8 = options.title.has_value() ? 
+        UTF8Convert::WideToUTF8(*options.title) : "";
+    
+    // Get access token override if available
+    std::string access_token_utf8 = data.action_invoker_access_token_override ? 
+        UTF8Convert::WideToUTF8(*data.action_invoker_access_token_override) : "";
+    
+    // Content type: 0 = Filename, 1 = HtmlUrl
+    int content_type = (data.content_type == Viewer::Data::Type::HtmlUrl) ? 1 : 0;
+    
+    int result = jspi_viewFile(content_utf8.c_str(), content_type, 
+                               title_utf8.c_str(), access_token_utf8.c_str());
+    
+    return result;
+#endif
+    
     return 0;
 }
 
