@@ -246,12 +246,16 @@ class QuestionnaireFragment : BaseFragment() {
     }
 
     private fun renderQuestionTextFrame(frameId: String): String {
+        // Note: Using allow-scripts WITHOUT allow-same-origin for security.
+        // Combining both allows the iframe to escape its sandbox by removing it.
+        // Without allow-same-origin, the iframe can still run scripts but cannot
+        // access parent window directly - must use postMessage instead.
         return """
             <iframe
                 id="$frameId"
                 class="question-text-iframe"
                 scrolling="no"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                sandbox="allow-scripts allow-forms allow-popups"
                 style="width:100%; border:0; display:block; background:transparent;"
             ></iframe>
         """.trimIndent()
@@ -506,44 +510,13 @@ console.log('[CAPI Shim] Loading CSProActionInvoker shim...');
     };
     console.log('[CAPI Shim] CSPro global object created with runLogic, invoke, do, etc.');
     
-    // ============================================================
-    // NAVIGATION FUNCTIONS - for roster/field navigation
-    // These dispatch special actions that EntryActivity handles
-    // ============================================================
-    function dispatchQsfAction(action, payload) {
-        console.log('[CAPI Shim] Dispatching QSF action:', action, payload);
-        window.parent.postMessage({
-            type: 'cspro-qsf-action',
-            action: action,
-            payload: payload || ''
-        }, '*');
-    }
-    
-    // endRoster() - called when user clicks "end the roster" link
-    window.endRoster = function() {
-        console.log('[CAPI Shim] endRoster() called');
-        dispatchQsfAction('endRoster', '');
-    };
-    
-    // moveToField(fieldName) - navigate to a specific field
-    window.moveToField = function(fieldName) {
-        console.log('[CAPI Shim] moveToField() called:', fieldName);
-        dispatchQsfAction('moveToField', fieldName || '');
-    };
-    
-    // advance() - advance to next field
-    window.advance = function() {
-        console.log('[CAPI Shim] advance() called');
-        dispatchQsfAction('advance', '');
-    };
-    
-    // UI namespace for compatibility (some QSF may use UI.endRoster)
+    // UI namespace - QSF content may use window.UI for compatibility
     window.UI = window.UI || {};
-    window.UI.endRoster = function() { return window.endRoster(); };
-    window.UI.moveToField = function(fieldName) { return window.moveToField(fieldName); };
-    window.UI.advance = function() { return window.advance(); };
     
-    console.log('[CAPI Shim] Navigation functions registered (endRoster, moveToField, advance)');
+    // NOTE: Navigation functions (endRoster, moveToField, advance) are NOT defined here.
+    // QSF content should define its own implementations that call user-defined CSPro
+    // logic functions via ActionInvoker (e.g., CS.Logic.evalAsync({ logic: "EndPersonRoster();" })).
+    // This matches the behavior on Android and Windows MFC.
     
     // ============================================================
     // MESSAGE HANDLER - Listen for responses from parent

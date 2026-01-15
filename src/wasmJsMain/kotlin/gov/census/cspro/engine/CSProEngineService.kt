@@ -8,6 +8,7 @@ import gov.census.cspro.data.CDEField
 import gov.census.cspro.data.FieldNote
 import gov.census.cspro.data.PffStartModeParameter
 import gov.census.cspro.data.ValueSetEntry
+import gov.census.cspro.engine.dialogs.CSProDialogManager
 import gov.census.cspro.platform.CSProWasmModule
 import gov.census.cspro.platform.CSProEngineInstance
 import kotlinx.browser.window
@@ -1554,6 +1555,9 @@ class CSProEngineService private constructor() {
     /**
      * Process action invoker message
      * Equivalent to: public String actionInvokerProcessMessage(...)
+     * 
+     * WASM-specific handling: UI dialog actions are handled directly in Kotlin via CSProDialogManager
+     * because the C++ engine's MFC-based dialog system doesn't work in WASM.
      */
     suspend fun actionInvokerProcessMessage(
         webControllerKey: Int,
@@ -1562,7 +1566,11 @@ class CSProEngineService private constructor() {
         async: Boolean,
         calledByOldCSProObject: Boolean
     ): String {
-        val eng = engine ?: return ""
+        println("[CSProEngineService] actionInvokerProcessMessage called with message: $message")
+        val eng = engine ?: run {
+            println("[CSProEngineService] Engine is null!")
+            return ""
+        }
 
         return try {
             // In WASM, the engine exposes processAction(actionName, argsJson).
@@ -1571,28 +1579,55 @@ class CSProEngineService private constructor() {
             val obj = try {
                 Json.parseToJsonElement(message).jsonObject
             } catch (e: Exception) {
+                println("[CSProEngineService] Invalid JSON message: ${e.message}")
                 logError("actionInvokerProcessMessage: invalid JSON message")
                 return ""
             }
 
             val rawAction = obj["action"]?.jsonPrimitive?.contentOrNull
-                ?: return ""
+                ?: run {
+                    println("[CSProEngineService] No action field in message")
+                    return ""
+                }
             val actionName = if (rawAction.endsWith("Async")) rawAction.removeSuffix("Async") else rawAction
+            val argsElement = obj["arguments"]
+            
+            println("[CSProEngineService] Parsed action: $actionName, args: ${argsElement?.toString()?.take(200)}")
+            logInfo("actionInvokerProcessMessage: $actionName with args: ${argsElement?.toString()?.take(200)}")
+
+            // WASM-specific: Handle UI dialog actions directly in Kotlin
+            // The C++ engine's HtmlDialogFunctionRunner uses MFC which doesn't work in WASM
+            when (actionName) {
+                "UI.alert" -> {
+                    println("[CSProEngineService] Handling UI.alert action")
+                    return handleUIAlert(argsElement)
+                }
+                "UI.showDialog" -> {
+                    println("[CSProEngineService] Handling UI.showDialog action")
+                    return handleUIShowDialog(argsElement)
+                }
+                "UI.closeDialog" -> {
+                    // closeDialog is handled by the dialog itself via postMessage
+                    return "{}"
+                    return "{}"
+                }
+                "UI.getInputData" -> {
+                    // Return cached input data (set when dialog was opened)
+                    return "{}"
+                }
+                "UI.setDisplayOptions" -> {
+                    // Display options are handled by the dialog container
+                    return "{}"
+                }
+            }
 
             val directMappedActions = setOf(
                 "Logic.invoke",
                 "Logic.eval",
                 "Logic.getSymbolValue",
                 "Logic.updateSymbolValue",
-                "UI.alert",
-                "UI.showDialog",
-                "UI.closeDialog",
-                "UI.getInputData",
-                "UI.setDisplayOptions",
                 "Application.getFormFile"
             )
-
-            val argsElement = obj["arguments"]
 
             val (engineActionName, engineArgsJson) = if (directMappedActions.contains(actionName)) {
                 actionName to (argsElement?.toString() ?: "{}")
@@ -1611,6 +1646,52 @@ class CSProEngineService private constructor() {
         } catch (e: Exception) {
             logError("Error processing action message: ${e.message}")
             ""
+        }
+    }
+    
+    /**
+     * Handle UI.alert action - show alert dialog via CSProDialogManager
+     */
+    private suspend fun handleUIAlert(argsElement: JsonElement?): String {
+        println("[CSProEngineService] handleUIAlert called with args: $argsElement")
+        val args = argsElement?.jsonObject ?: run {
+            println("[CSProEngineService] handleUIAlert: args is null or not a JsonObject")
+            return "{}"
+        }
+        val text = args["text"]?.jsonPrimitive?.contentOrNull ?: ""
+        val title = args["title"]?.jsonPrimitive?.contentOrNull ?: "Alert"
+        
+        println("[CSProEngineService] handleUIAlert: title='$title', text='$text'")
+        logInfo("handleUIAlert: title='$title', text='$text'")
+        
+        try {
+            println("[CSProEngineService] Calling CSProDialogManager.showErrmsg...")
+            val result = CSProDialogManager.showErrmsg(title, text, listOf("OK"))
+            println("[CSProEngineService] CSProDialogManager.showErrmsg returned: $result")
+        } catch (e: Exception) {
+            println("[CSProEngineService] handleUIAlert error: ${e.message}")
+            e.printStackTrace()
+            logError("handleUIAlert error: ${e.message}")
+        }
+        return "{}"
+    }
+    
+    /**
+     * Handle UI.showDialog action - show custom HTML dialog via CSProDialogManager
+     */
+    private suspend fun handleUIShowDialog(argsElement: JsonElement?): String {
+        val args = argsElement?.jsonObject ?: return "{}"
+        val path = args["path"]?.jsonPrimitive?.contentOrNull ?: return "{}"
+        val inputData = args["inputData"]
+        
+        logInfo("handleUIShowDialog: path='$path'")
+        
+        try {
+            val result = CSProDialogManager.showDialog(path, inputData)
+            return result?.toString() ?: "{}"
+        } catch (e: Exception) {
+            logError("handleUIShowDialog error: ${e.message}")
+            return "{}"
         }
     }
     

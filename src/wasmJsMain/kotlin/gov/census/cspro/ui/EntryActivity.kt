@@ -140,6 +140,7 @@ class EntryActivity : BaseActivity(), EngineEventListener {
     private var casePosition: Double = -1.0
     private var isEngineInitialized = false
     private var hasShownNullPageError = false
+    private var isFinishing = false  // Guard against multiple finish() calls
     
     override fun onCreate() {
         super.onCreate()
@@ -833,6 +834,8 @@ class EntryActivity : BaseActivity(), EngineEventListener {
     }
     
     override fun onApplicationClosed() {
+        // Only respond if we're the active/resumed activity
+        if (!isResumed) return
         finish()
     }
     
@@ -859,12 +862,20 @@ class EntryActivity : BaseActivity(), EngineEventListener {
     }
     
     override fun finish() {
+        // Guard against multiple finish() calls
+        if (isFinishing) return
+        isFinishing = true
+        
         scope.launch {
+            // Remove listener FIRST to prevent recursive calls from engine notifications
+            engineService?.removeListener(this@EntryActivity)
+            
             if (isEngineInitialized) {
                 engineService?.stopApplication()
-                engineService?.endApplication()
+                // Note: Don't call endApplication() here - we're going back to CaseListActivity
+                // which will still need the app open. The app will be closed when
+                // CaseListActivity finishes (going back to ApplicationsListActivity).
             }
-            engineService?.removeListener(this@EntryActivity)
             
             questionnaireFragment?.onPause()
             questionnaireFragment?.onDestroyView()

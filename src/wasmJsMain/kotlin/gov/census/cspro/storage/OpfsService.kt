@@ -357,6 +357,30 @@ object OpfsService {
     }
     
     /**
+     * List all files recursively
+     */
+    suspend fun listAllFiles(dirPath: String): List<FileInfo> {
+        val allFiles = mutableListOf<FileInfo>()
+        val queue = ArrayDeque<String>()
+        queue.add(dirPath)
+        
+        while (!queue.isEmpty()) {
+            val currentPath = queue.removeFirst()
+            val files = listFiles(currentPath)
+            
+            for (file in files) {
+                if (file.isDirectory) {
+                    queue.add(file.path)
+                } else {
+                    allFiles.add(file)
+                }
+            }
+        }
+        
+        return allFiles
+    }
+
+    /**
      * List files in a directory
      */
     suspend fun listFiles(dirPath: String): List<FileInfo> {
@@ -382,11 +406,15 @@ object OpfsService {
                 val entry = jsArrayGet(entriesArray, i) ?: continue
                 val name = jsGetStringProperty(entry, "name") ?: continue
                 val kind = jsGetStringProperty(entry, "kind") ?: continue
+                val isDir = kind == "directory"
                 
+                // Note: File size retrieval is done separately to avoid blocking
+                // Use getFileSize() method for individual file sizes
                 files.add(FileInfo(
                     name = name,
-                    isDirectory = kind == "directory",
-                    path = if (dirPath.isEmpty()) name else "$dirPath/$name"
+                    isDirectory = isDir,
+                    path = if (dirPath.isEmpty()) name else "$dirPath/$name",
+                    size = 0  // Size retrieved on demand
                 ))
             }
         } catch (e: Exception) {

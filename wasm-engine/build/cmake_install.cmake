@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine
+# Install script for directory: C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -12,7 +12,7 @@ if(NOT DEFINED CMAKE_INSTALL_CONFIG_NAME)
     string(REGEX REPLACE "^[^A-Za-z0-9_]+" ""
            CMAKE_INSTALL_CONFIG_NAME "${BUILD_TYPE}")
   else()
-    set(CMAKE_INSTALL_CONFIG_NAME "Release")
+    set(CMAKE_INSTALL_CONFIG_NAME "")
   endif()
   message(STATUS "Install configuration: \"${CMAKE_INSTALL_CONFIG_NAME}\"")
 endif()
@@ -39,35 +39,35 @@ endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
   list(APPEND CMAKE_ABSOLUTE_DESTINATION_FILES
-   "C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine/../public/wasm/csentryKMP.js;C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine/../public/wasm/csentryKMP.wasm")
+   "C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine/../public/wasm/csentryKMP.js;C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine/../public/wasm/csentryKMP.wasm")
   if(CMAKE_WARN_ON_ABSOLUTE_INSTALL_DESTINATION)
     message(WARNING "ABSOLUTE path INSTALL DESTINATION : ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
   endif()
   if(CMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION)
     message(FATAL_ERROR "ABSOLUTE path INSTALL DESTINATION forbidden (by caller): ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
   endif()
-  file(INSTALL DESTINATION "C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine/../public/wasm" TYPE FILE FILES
-    "C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine/build/csentryKMP.js"
-    "C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine/build/csentryKMP.wasm"
+  file(INSTALL DESTINATION "C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine/../public/wasm" TYPE FILE FILES
+    "C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine/build/csentryKMP.js"
+    "C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine/build/csentryKMP.wasm"
     )
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
   list(APPEND CMAKE_ABSOLUTE_DESTINATION_FILES
-   "C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine/../public/wasm/csentryKMP.data")
+   "C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine/../public/wasm/csentryKMP.data")
   if(CMAKE_WARN_ON_ABSOLUTE_INSTALL_DESTINATION)
     message(WARNING "ABSOLUTE path INSTALL DESTINATION : ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
   endif()
   if(CMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION)
     message(FATAL_ERROR "ABSOLUTE path INSTALL DESTINATION forbidden (by caller): ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
   endif()
-  file(INSTALL DESTINATION "C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine/../public/wasm" TYPE FILE FILES "C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine/build/csentryKMP.data")
+  file(INSTALL DESTINATION "C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine/../public/wasm" TYPE FILE FILES "C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine/build/csentryKMP.data")
 endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine/build/install_local_manifest.txt"
+  file(WRITE "C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine/build/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()
 if(CMAKE_INSTALL_COMPONENT)
@@ -83,6 +83,6 @@ else()
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "C:/Users/Admin/OneDrive/Documents/Github/CSEntry Web App/CSEntryWeb_KMP/wasm-engine/build/${CMAKE_INSTALL_MANIFEST}"
+  file(WRITE "C:/Users/Admin/Documents/CSEntryWeb_KMP/wasm-engine/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

@@ -12,6 +12,7 @@ repositories {
 }
 
 kotlin {
+    jvmToolchain(17)
     // Target: WebAssembly for browsers
     wasmJs {
         moduleName = "csentry-web"

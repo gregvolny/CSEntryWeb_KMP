@@ -1,5 +1,6 @@
 package gov.census.cspro.ui
 
+import gov.census.cspro.bridge.CNPifFile
 import gov.census.cspro.storage.OpfsService
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -29,6 +30,36 @@ private external fun jsGetFileName(file: JsAny): String
 
 @JsFun("(file) => file.webkitRelativePath || file.name")
 private external fun jsGetRelativePath(file: JsAny): String
+
+// Native File System API
+@JsFun("() => window.showDirectoryPicker()")
+private external fun jsShowDirectoryPicker(): JsAny // Returns Promise<FileSystemDirectoryHandle>
+
+@JsFun("(handle) => handle.name")
+private external fun jsGetHandleName(handle: JsAny): String
+
+@JsFun("(handle) => handle.values()")
+private external fun jsGetHandleValues(handle: JsAny): JsAny // Returns AsyncIterator
+
+@JsFun("""(iterator) => {
+    return (async function() {
+        const arr = [];
+        for await (const entry of iterator) {
+            arr.push(entry);
+        }
+        return arr;
+    })();
+}""")
+private external fun jsAsyncIteratorToArray(iterator: JsAny): JsAny
+
+@JsFun("(entry) => entry.kind === 'file'")
+private external fun jsIsFileHandle(entry: JsAny): Boolean
+
+@JsFun("(entry) => entry.kind === 'directory'")
+private external fun jsIsDirectoryHandle(entry: JsAny): Boolean
+
+@JsFun("(fileHandle) => fileHandle.getFile()")
+private external fun jsGetFileFromHandle(fileHandle: JsAny): JsAny // Returns Promise<File>
 
 @JsFun("(file) => file.arrayBuffer()")
 private external fun jsReadArrayBuffer(file: JsAny): JsAny
@@ -169,8 +200,8 @@ class ApplicationsListActivity : BaseActivity() {
                                         </svg>
                                     </div>
                                     <div class="option-text">
-                                        <h3>PFF File</h3>
-                                        <p>Select a CSPro PFF file directly</p>
+                                        <h3>Run Local Application</h3>
+                                        <p>Select an application folder from your device to run</p>
                                     </div>
                                 </button>
                                 
@@ -380,56 +411,149 @@ class ApplicationsListActivity : BaseActivity() {
     private fun onSelectFileClicked() {
         scope.launch {
             try {
-                println("[ApplicationsListActivity] Selecting file...")
+                println("[ApplicationsListActivity] Selecting native folder (PFF Mode)...")
                 
-                val input = jsCreateInputElement()
-                // Accept PFF and PEN files
-                input.accept = ".pff,.pen,.dcf,.ent"
+                // Use Native File System API - showDirectoryPicker
+                // We pick a directory to ensure we get all related files (pff, pen, dcf, etc.)
+                val handlePromise = jsShowDirectoryPicker()
                 
-                val files = selectFilesWithInput(input)
-                
-                if (files.isEmpty()) {
-                    return@launch
-                }
-                
-                // Show progress
-                val uploadStatus = document.getElementById("upload-status") as? HTMLDivElement
-                val progressText = document.getElementById("upload-progress-text") as? HTMLElement
-                val progressBar = document.getElementById("upload-progress-bar") as? HTMLDivElement
-                
-                uploadStatus?.style?.display = "block"
-                progressText?.textContent = "Uploading files..."
-                
-                var uploadedCount = 0
-                for ((index, fileInfo) in files.withIndex()) {
-                    val (fileName, fileData) = fileInfo
-                    
-                    // Create folder based on filename
-                    val appName = fileName.substringBeforeLast(".")
-                    val opfsPath = "applications/$appName/$fileName"
-                    
-                    try {
-                        OpfsService.writeFile(opfsPath, fileData)
-                        uploadedCount++
-                        
-                        val progress = ((index + 1).toFloat() / files.size * 100).toInt()
-                        progressBar?.style?.width = "$progress%"
-                    } catch (e: Exception) {
-                        println("[ApplicationsListActivity] Failed to write file: $opfsPath - $e")
+                jsAwaitPromise(handlePromise) { dirHandle ->
+                    scope.launch {
+                        try {
+                            val dirName = jsGetHandleName(dirHandle)
+                            println("[ApplicationsListActivity] Selected directory: $dirName")
+                            
+                            // Show progress
+                            val uploadStatus = document.getElementById("upload-status") as? HTMLDivElement
+                            val progressText = document.getElementById("upload-progress-text") as? HTMLElement
+                            val progressBar = document.getElementById("upload-progress-bar") as? HTMLDivElement
+                            
+                            uploadStatus?.style?.display = "block"
+                            progressText?.textContent = "Scanning local files..."
+                            progressBar?.style?.width = "0%"
+                            
+                            // Recursive scan of the handle
+                            val files = scanDirectoryHandle(dirHandle)
+                            
+                            if (files.isEmpty()) {
+                                progressText?.textContent = "No files found."
+                                return@launch
+                            }
+                            
+                            // Find PFF
+                            val pffFile = files.find { it.first.endsWith(".pff", ignoreCase = true) }
+                            if (pffFile == null) {
+                                progressText?.textContent = "No .pff file found in selected folder."
+                                return@launch
+                            }
+                            
+                            progressText?.textContent = "Importing ${files.size} files..."
+                            
+                            // Upload to OPFS under a specific "RunLocal" area or applications
+                            // We use the directory name or a timestamp to avoid collisions
+                            val destFolder = "applications/$dirName"
+                            
+                            var uploadedCount = 0
+                            for ((index, fileInfo) in files.withIndex()) {
+                                val (relPath, data) = fileInfo
+                                val opfsPath = "$destFolder/$relPath"
+                                
+                                try {
+                                    OpfsService.writeFile(opfsPath, data)
+                                    uploadedCount++
+                                    
+                                    val progress = ((index + 1).toFloat() / files.size * 100).toInt()
+                                    progressBar?.style?.width = "$progress%"
+                                } catch (e: Exception) {
+                                    println("[ApplicationsListActivity] Write error: $e")
+                                }
+                            }
+                            
+                            progressText?.textContent = "✓ Succeeded! Launching..."
+                            
+                            // Launch the PFF
+                            kotlinx.coroutines.delay(500)
+                            
+                            val pffPath = "$destFolder/${pffFile.first}"
+                            val description = readPffDescription(pffPath) ?: dirName
+                            
+                            hideAddApplicationModal()
+                            
+                            startActivity("CaseListActivity", mapOf(
+                                "filename" to pffPath,
+                                "description" to description
+                            ))
+                            
+                        } catch (e: Exception) {
+                             println("[ApplicationsListActivity] Error in native handling: $e")
+                             val progressText = document.getElementById("upload-progress-text") as? HTMLElement
+                             progressText?.textContent = "Error: ${e.message}"
+                        }
                     }
                 }
-                
-                progressText?.textContent = "✓ Application added successfully!"
-                progressBar?.style?.width = "100%"
-                progressBar?.classList?.add("complete")
-                
-                scheduleRefresh()
-                
             } catch (e: Exception) {
-                println("[ApplicationsListActivity] Error selecting file: $e")
+                println("[ApplicationsListActivity] Native picker cancelled or error: $e")
             }
         }
     }
+
+    private suspend fun scanDirectoryHandle(dirHandle: JsAny, parentPath: String = ""): List<Pair<String, ByteArray>> {
+        val result = mutableListOf<Pair<String, ByteArray>>()
+        
+        // iterate values() - returns async iterator of handles
+        val iterator = jsGetHandleValues(dirHandle)
+        val entriesPromise = jsAsyncIteratorToArray(iterator)
+        
+        // Wait for array of entries
+        var entries: JsAny? = null
+        suspendCancellableCoroutine<Unit> { cont ->
+            jsAwaitPromise(entriesPromise) { res ->
+                entries = res
+                cont.resumeWith(Result.success(Unit))
+            }
+        }
+        
+        if (entries == null) return emptyList()
+        
+        val count = jsFileListLength(entries) // Reuse list length helper for array
+        for (i in 0 until count) {
+            val entry = jsFileListItem(entries!!, i) ?: continue // Reuse item helper
+            val name = jsGetHandleName(entry)
+            
+            if (jsIsFileHandle(entry)) {
+                // Read File
+                val filePromise = jsGetFileFromHandle(entry)
+                var fileData: ByteArray? = null
+                
+                suspendCancellableCoroutine<Unit> { cont ->
+                    jsAwaitPromise(filePromise) { file ->
+                        // Read array buffer
+                        val bufferPromise = jsReadArrayBuffer(file)
+                        jsAwaitPromise(bufferPromise) { buffer ->
+                            try {
+                                fileData = arrayBufferToByteArray(buffer)
+                                cont.resumeWith(Result.success(Unit))
+                            } catch(e: Exception) { cont.resumeWith(Result.success(Unit)) }
+                        }
+                    }
+                }
+                
+                if (fileData != null) {
+                    val path = if (parentPath.isEmpty()) name else "$parentPath/$name"
+                    result.add(Pair(path, fileData!!))
+                }
+                
+            } else if (jsIsDirectoryHandle(entry)) {
+                // Recurse
+                val path = if (parentPath.isEmpty()) name else "$parentPath/$name"
+                val subFiles = scanDirectoryHandle(entry, path)
+                result.addAll(subFiles)
+            }
+        }
+        
+        return result
+    }
+
     
     private suspend fun selectFilesWithInput(input: HTMLInputElement): List<Pair<String, ByteArray>> {
         return suspendCancellableCoroutine { cont ->
@@ -506,8 +630,8 @@ class ApplicationsListActivity : BaseActivity() {
     
     private fun onSettingsClicked() {
         println("[ApplicationsListActivity] Settings clicked")
-        // TODO: Show settings dialog
-        DialogHelper.showInfo("Settings", "Settings coming soon")
+        // Show the settings activity
+        startActivity("SettingsActivity", null)
     }
     
     private fun loadApplications() {
@@ -520,42 +644,30 @@ class ApplicationsListActivity : BaseActivity() {
                 
                 applications.clear()
                 
+                // Setting for hidden applications (like Android's showHiddenApplications preference)
+                val showHiddenApplications = false // Could be loaded from preferences
+                
                 if (opfsInitialized) {
-                    // Get all entries in the applications directory
-                    val appEntries = OpfsService.listFiles("applications")
+                    // Recursive scan for all PFF files in applications/ directory
+                    val allFiles = OpfsService.listAllFiles("applications")
+                    val pffFiles = allFiles.filter { it.name.endsWith(".pff", ignoreCase = true) }
                     
-                    for (entry in appEntries) {
-                        if (entry.isDirectory) {
-                            // Standard case: Application in its own folder
-                            // Look for PFF files in the folder
-                            val subFiles = OpfsService.listFiles(entry.path)
-                            val pffFile = subFiles.find { it.name.endsWith(".pff", ignoreCase = true) }
-                            
-                            if (pffFile != null) {
-                                // Read PFF to get description
-                                val description = readPffDescription(pffFile.path)
-                                    ?: entry.name
-                                
-                                applications.add(
-                                    ApplicationInfo(
-                                        filename = pffFile.path,
-                                        description = description,
-                                        isEntryApp = true
-                                    )
-                                )
-                            }
-                        } else if (entry.name.endsWith(".pff", ignoreCase = true)) {
-                            // Non-standard case: PFF file directly in applications root
-                            val description = readPffDescription(entry.path)
-                                ?: entry.name.substringBeforeLast(".")
-                            
+                    for (pffFile in pffFiles) {
+                        // Parse PFF using CNPifFile (matching Android behavior)
+                        val pifFile = CNPifFile.loadAsync(pffFile.path)
+                        
+                        // Only show applications based on ShowInApplicationListing setting
+                        // This matches Android's ShouldShowInApplicationListing() logic exactly
+                        if (pifFile.isValid && pifFile.shouldShowInApplicationListing(showHiddenApplications)) {
                             applications.add(
                                 ApplicationInfo(
-                                    filename = entry.path,
-                                    description = description,
-                                    isEntryApp = true
+                                    filename = pffFile.path,
+                                    description = pifFile.description.trim(),
+                                    isEntryApp = pifFile.entryAppType
                                 )
                             )
+                        } else {
+                            println("[ApplicationsListActivity] Filtered out: ${pffFile.name} (ShowInApplicationListing=${pifFile.showInApplicationListing})")
                         }
                     }
                 }
@@ -645,12 +757,16 @@ class ApplicationsListActivity : BaseActivity() {
     
     private fun launchApplication(app: ApplicationInfo) {
         println("[ApplicationsListActivity] Launching ${app.filename}")
+        println("[ApplicationsListActivity] isEntryApp=${app.isEntryApp}, description=${app.description}")
         
         if (app.isEntryApp) {
+            println("[ApplicationsListActivity] Starting CaseListActivity...")
             startActivity("CaseListActivity", mapOf(
                 "filename" to app.filename,
                 "description" to app.description
             ))
+        } else {
+            println("[ApplicationsListActivity] Not an entry app - cannot launch")
         }
     }
     

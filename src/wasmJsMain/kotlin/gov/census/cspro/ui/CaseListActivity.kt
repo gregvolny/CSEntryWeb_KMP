@@ -40,6 +40,7 @@ class CaseListActivity : BaseActivity(), EngineEventListener {
     private var pffFilename: String? = null
     private var appDescription: String? = null
     private var isEngineInitialized = false
+    private var isFinishing = false  // Guard against multiple finish() calls
     
     override fun onCreate() {
         super.onCreate()
@@ -174,9 +175,22 @@ class CaseListActivity : BaseActivity(), EngineEventListener {
                 val pff = pffFilename
                 println("[CaseListActivity] PFF filename: $pff")
                 if (!pff.isNullOrEmpty() && pff != "Unknown.pff") {
-                    println("[CaseListActivity] Calling openApplication...")
-                    val opened = engineService?.openApplication(pff) ?: false
-                    println("[CaseListActivity] openApplication returned: $opened")
+                    // Check if the application is already open
+                    val alreadyOpen = engineService?.isApplicationOpen() ?: false
+                    println("[CaseListActivity] Application already open: $alreadyOpen")
+                    
+                    val opened = if (alreadyOpen) {
+                        // App is already open, just use it
+                        println("[CaseListActivity] Reusing already open application")
+                        true
+                    } else {
+                        // Need to open the application
+                        println("[CaseListActivity] Calling openApplication...")
+                        val result = engineService?.openApplication(pff) ?: false
+                        println("[CaseListActivity] openApplication returned: $result")
+                        result
+                    }
+                    
                     if (opened) {
                         println("[CaseListActivity] Setting isEngineInitialized = true")
                         isEngineInitialized = true
@@ -424,6 +438,8 @@ class CaseListActivity : BaseActivity(), EngineEventListener {
     }
     
     override fun onApplicationClosed() {
+        // Only respond if we're the active/resumed activity
+        if (!isResumed) return
         finish()
     }
     
@@ -441,10 +457,23 @@ class CaseListActivity : BaseActivity(), EngineEventListener {
     }
     
     override fun finish() {
-        engineService?.removeListener(this)
-        onDestroy()
-        container?.innerHTML = ""
-        ActivityRouter.goBack()
+        // Guard against multiple finish() calls
+        if (isFinishing) return
+        isFinishing = true
+        
+        scope.launch {
+            // Remove listener FIRST to prevent recursive calls when endApplication triggers notifications
+            engineService?.removeListener(this@CaseListActivity)
+            
+            // Close the application when going back to ApplicationsListActivity
+            if (isEngineInitialized) {
+                println("[CaseListActivity] Closing application before finish...")
+                engineService?.endApplication()
+            }
+            onDestroy()
+            container?.innerHTML = ""
+            ActivityRouter.goBack()
+        }
     }
 
     override fun onDestroy() {

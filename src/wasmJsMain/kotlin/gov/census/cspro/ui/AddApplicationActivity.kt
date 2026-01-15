@@ -31,6 +31,9 @@ private external fun jsGetFileWebkitRelativePath(file: JsAny): String
 @JsFun("(file) => file.arrayBuffer()")
 private external fun jsReadFileAsArrayBuffer(file: JsAny): JsAny  // Returns Promise
 
+@JsFun("(ab) => ab ? ab.byteLength : 0")
+private external fun jsGetArrayBufferByteLength(ab: JsAny): Int
+
 @JsFun("() => Date.now()")
 private external fun jsDateNow(): Double
 
@@ -360,18 +363,26 @@ class AddApplicationActivity : BaseActivity() {
                 
                 // Read file as ArrayBuffer and write to OPFS
                 try {
+                    println("[AddApplicationActivity] Reading file: ${fileWrapper.name}, size: ${fileWrapper.size}")
                     val arrayBufferPromise = jsReadFileAsArrayBuffer(fileWrapper.jsFile)
+                    println("[AddApplicationActivity] Got promise, awaiting...")
                     val arrayBuffer = awaitJsPromise(arrayBufferPromise)
+                    println("[AddApplicationActivity] ArrayBuffer received: ${arrayBuffer != null}")
                     if (arrayBuffer != null) {
+                        val bufferSize = jsGetArrayBufferByteLength(arrayBuffer)
+                        println("[AddApplicationActivity] ArrayBuffer size: $bufferSize bytes")
                         val success = OpfsService.writeFileFromArrayBuffer(path, arrayBuffer)
                         if (success) {
-                            println("[AddApplicationActivity] Uploaded: $path")
+                            println("[AddApplicationActivity] Uploaded: $path ($bufferSize bytes)")
                         } else {
                             println("[AddApplicationActivity] Failed to write: $path")
                         }
+                    } else {
+                        println("[AddApplicationActivity] ArrayBuffer is null for: $path")
                     }
                 } catch (e: Exception) {
                     println("[AddApplicationActivity] Error uploading $path: ${e.message}")
+                    e.printStackTrace()
                 }
                 
                 uploaded++
