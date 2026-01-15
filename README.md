@@ -21,7 +21,7 @@ Kotlin/Wasm UI layer.
 | Field Navigation | ✅ Working | Next/Previous field with engine sync |
 | Question Text | ✅ Working | QSF rendering via virtual file system |
 | Case Tree Navigation | ✅ Working | Hierarchical tree with expand/collapse |
-| Field Validation | 🔧 In Progress | NOTAPPL handling for blank fields |
+| Field Validation |  ✅ Working | NOTAPPL handling for blank fields |
 
 ## Architecture Summary
 
@@ -315,9 +315,9 @@ The `NOTAPPL` constant (`SpecialValues::m_NOTAPPL`) is CSPro's special value for
 
 ### Phase 1: Complete Validation (In Progress)
 1.  ✅ Fix NOTAPPL for empty numeric fields
-2.  ⏳ Test validation triggers correctly
-3.  ⏳ Handle validation error messages/dialogs
-4.  ⏳ Implement reenter/skip logic
+2.  ✅ Test validation triggers correctly
+3.  ✅ Handle validation error messages/dialogs
+4.  ✅ Implement reenter/skip logic
 
 ### Phase 2: Additional Features
 1.  Notes editor dialog
@@ -331,7 +331,7 @@ The `NOTAPPL` constant (`SpecialValues::m_NOTAPPL`) is CSPro's special value for
 1.  Case save functionality
 2.  Case modification
 3.  Case deletion
-4.  Partial save support
+4.  Partial save support 
 
 ### Phase 4: Sync & Deployment
 1.  Sync with CSWeb server
