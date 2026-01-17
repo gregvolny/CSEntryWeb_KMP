@@ -349,10 +349,9 @@ The `NOTAPPL` constant (`SpecialValues::m_NOTAPPL`) is CSPro's special value for
 7.  Iframe Sandboxing: Question text HTML rendered in sandboxed iframes for security
 
 ## Known Issues
-1.  QSF Interactive Elements: Links, buttons, and JavaScript in question text HTML are not working properly in sandboxed iframes. This was solved in the CSEntry MFC (Windows) port but needs to be ported to the web version.
-2.  Iframe Security Warnings: `allow-scripts` + `allow-same-origin` warnings in console (expected)
-3.  Multiple Virtual HTML Files: VFS accumulates files during session (minor memory concern)
-4.  Browser Caching: May need hard refresh (Ctrl+Shift+R) after WASM updates
+1.  Iframe Security Warnings: `allow-scripts` + `allow-same-origin` warnings in console (expected)
+2.  Multiple Virtual HTML Files: VFS accumulates files during session (minor memory concern)
+3.  Browser Caching: May need hard refresh (Ctrl+Shift+R) after WASM updates
 
 ## Success Metrics
 *   ✅ Architecture Complete
@@ -394,4 +393,4 @@ The Android CSEntryDroid application has been successfully converted to a Kotlin
 
 The current focus is completing field validation to ensure data quality rules are properly enforced in the web environment.
 
-Server URL: http://localhost:3002
+
