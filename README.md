@@ -1,6 +1,6 @@
 # CSEntry Web Application (CSPro CAWI) - Android to Kotlin Multiplatform Conversion
 
-Last Updated: January 14, 2026
+Last Updated: January 15, 2026
 
 ## Overview
 
@@ -323,8 +323,8 @@ The `NOTAPPL` constant (`SpecialValues::m_NOTAPPL`) is CSPro's special value for
 1.  Notes editor dialog
 2.  Lookup dialogs
 3.  Progress indicators during save
-4.  Error message display
-5.  Settings screen
+4.  ⏳Error message display
+5.  ⏳Settings screen
 6.  Help system
 
 ### Phase 3: Data Management
