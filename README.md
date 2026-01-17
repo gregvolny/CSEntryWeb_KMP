@@ -1,6 +1,6 @@
 # CSEntry Web Application (CSPro CAWI) - Android to Kotlin Multiplatform Conversion
 
-Last Updated: January 15, 2026
+Last Updated: January 14, 2026
 
 ## Overview
 
@@ -21,7 +21,7 @@ Kotlin/Wasm UI layer.
 | Field Navigation | ✅ Working | Next/Previous field with engine sync |
 | Question Text | ✅ Working | QSF rendering via virtual file system |
 | Case Tree Navigation | ✅ Working | Hierarchical tree with expand/collapse |
-| Field Validation |  ✅ Working | NOTAPPL handling for blank fields |
+| Field Validation | 🔧 In Progress | NOTAPPL handling for blank fields |
 
 ## Architecture Summary
 
@@ -315,9 +315,9 @@ The `NOTAPPL` constant (`SpecialValues::m_NOTAPPL`) is CSPro's special value for
 
 ### Phase 1: Complete Validation (In Progress)
 1.  ✅ Fix NOTAPPL for empty numeric fields
-2.  ✅ Test validation triggers correctly
-3.  ✅ Handle validation error messages/dialogs
-4.  ✅ Implement reenter/skip logic
+2.  ⏳ Test validation triggers correctly
+3.  ⏳ Handle validation error messages/dialogs
+4.  ⏳ Implement reenter/skip logic
 
 ### Phase 2: Additional Features
 1.  Notes editor dialog
@@ -331,7 +331,7 @@ The `NOTAPPL` constant (`SpecialValues::m_NOTAPPL`) is CSPro's special value for
 1.  Case save functionality
 2.  Case modification
 3.  Case deletion
-4.  Partial save support 
+4.  Partial save support
 
 ### Phase 4: Sync & Deployment
 1.  Sync with CSWeb server
@@ -349,10 +349,9 @@ The `NOTAPPL` constant (`SpecialValues::m_NOTAPPL`) is CSPro's special value for
 7.  Iframe Sandboxing: Question text HTML rendered in sandboxed iframes for security
 
 ## Known Issues
-1.  QSF Interactive Elements: Links, buttons, and JavaScript in question text HTML are not working properly in sandboxed iframes. This was solved in the CSEntry MFC (Windows) port but needs to be ported to the web version.
-2.  Iframe Security Warnings: `allow-scripts` + `allow-same-origin` warnings in console (expected)
-3.  Multiple Virtual HTML Files: VFS accumulates files during session (minor memory concern)
-4.  Browser Caching: May need hard refresh (Ctrl+Shift+R) after WASM updates
+1.  Iframe Security Warnings: `allow-scripts` + `allow-same-origin` warnings in console (expected)
+2.  Multiple Virtual HTML Files: VFS accumulates files during session (minor memory concern)
+3.  Browser Caching: May need hard refresh (Ctrl+Shift+R) after WASM updates
 
 ## Success Metrics
 *   ✅ Architecture Complete
@@ -393,5 +392,3 @@ The Android CSEntryDroid application has been successfully converted to a Kotlin
 *   Display hierarchical case tree navigation
 
 The current focus is completing field validation to ensure data quality rules are properly enforced in the web environment.
-
-Server URL: http://localhost:3002
